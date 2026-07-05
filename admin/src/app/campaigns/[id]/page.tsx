@@ -47,12 +47,15 @@ type CampaignForm = {
   externalId: string;
   trafficSourceProfileId: string;
   trackingMode: 'redirect' | 'direct';
+  redirectMode: 'http_302' | 'meta_refresh' | 'double_meta';
   domainId: string;
   destinationUrl: string;
   active: boolean;
   landerName: string;
   offerName: string;
   workspaceName: string;
+  attributionWindowHours: number | null;
+  maxConversionsPerClick: number | null;
 };
 
 function toForm(c: Campaign): CampaignForm {
@@ -62,12 +65,15 @@ function toForm(c: Campaign): CampaignForm {
     externalId: c.externalId || '',
     trafficSourceProfileId: c.trafficSourceProfileId || c.trafficSourceProfile?.id || '',
     trackingMode: c.trackingMode || 'redirect',
+    redirectMode: c.redirectMode || 'http_302',
     domainId: c.domainId || '',
     destinationUrl: c.destinationUrl,
     active: c.active,
     landerName: c.landerName || '',
     offerName: c.offerName || '',
     workspaceName: c.workspaceName || '',
+    attributionWindowHours: c.attributionWindowHours ?? null,
+    maxConversionsPerClick: c.maxConversionsPerClick ?? null,
   };
 }
 
@@ -214,6 +220,12 @@ export default function CampaignDetailPage() {
         </div>
       </div>
 
+      <div className="mb-6">
+        <InlineLink href={`/campaigns/${id}/paths`} className="text-sm font-medium">
+          Manage paths &amp; rotation →
+        </InlineLink>
+      </div>
+
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
           <StatCard label="Visits" value={stats.visits} />
@@ -297,6 +309,64 @@ export default function CampaignDetailPage() {
               <option value="redirect">Redirect (native — Mediago/Outbrain)</option>
               <option value="direct">Direct LP (Facebook/Google)</option>
             </Select>
+          </div>
+        </div>
+
+        {form.trackingMode === 'redirect' && (
+          <div>
+            <Label>Redirect mode (referrer hiding)</Label>
+            <Select
+              value={form.redirectMode}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  redirectMode: e.target.value as CampaignForm['redirectMode'],
+                })
+              }
+            >
+              <option value="http_302">HTTP 302 (default, fastest)</option>
+              <option value="meta_refresh">Meta refresh (hide referrer)</option>
+              <option value="double_meta">Double meta (hide referrer chain)</option>
+            </Select>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Attribution window (hours)</Label>
+            <Input
+              type="number"
+              min={0}
+              placeholder="No limit"
+              value={form.attributionWindowHours ?? ''}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  attributionWindowHours: e.target.value ? parseInt(e.target.value, 10) : null,
+                })
+              }
+            />
+            <p className={`text-xs ${mutedTextClass} mt-1`}>
+              Reject conversions older than N hours after the click. Empty = no limit.
+            </p>
+          </div>
+          <div>
+            <Label>Max conversions per click</Label>
+            <Input
+              type="number"
+              min={0}
+              placeholder="Unlimited"
+              value={form.maxConversionsPerClick ?? ''}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  maxConversionsPerClick: e.target.value ? parseInt(e.target.value, 10) : null,
+                })
+              }
+            />
+            <p className={`text-xs ${mutedTextClass} mt-1`}>
+              Cap conversions per click to curb injection. Empty = unlimited.
+            </p>
           </div>
         </div>
 
@@ -445,6 +515,27 @@ export default function CampaignDetailPage() {
             {(campaign.conversionMethod || 'mediago_s2s').replace(/_/g, ' ')}
           </span>
         </p>
+
+        <fieldset className="border border-zinc-200 dark:border-zinc-700 rounded-xl p-4 mb-4">
+          <legend className={`px-2 text-sm font-medium ${bodyTextClass}`}>
+            Incoming postback security
+          </legend>
+          <Label>
+            Shared secret — networks must append{' '}
+            <code className={inlineCodeClass}>?secret=…</code> on S2S postbacks
+          </Label>
+          <Input
+            type="text"
+            placeholder="Leave empty to rely on IP allowlist only"
+            value={postback.postbackSecret ?? ''}
+            onChange={(e) => setPostback({ ...postback, postbackSecret: e.target.value })}
+            className="font-mono text-sm"
+          />
+          <p className={`text-xs ${mutedTextClass} mt-2`}>
+            When set, incoming <code className={inlineCodeClass}>/postback</code> calls without a
+            matching secret (or an allowlisted IP) are rejected. Empty = unsecured (legacy).
+          </p>
+        </fieldset>
 
         <div className="space-y-4">
           {(campaign.conversionMethod === 'mediago_s2s' || !campaign.conversionMethod) && (

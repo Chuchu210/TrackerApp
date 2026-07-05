@@ -8,22 +8,56 @@ import { NotificationBell } from './NotificationBell';
 import { ThemeToggle } from './ThemeToggle';
 import { useSidebar } from './SidebarContext';
 
-const links = [
-  { href: '/overview', label: 'Overview', icon: 'M3 3v18h18M7 14l4-4 4 4 5-6' },
-  { href: '/funnel', label: 'LP Funnel', icon: 'M4 20V4M4 20h16M8 16l3-4 3 2 4-6' },
-  { href: '/', label: 'Campaigns', icon: 'M3 7h18M3 12h18M3 17h18' },
-  { href: '/domains', label: 'Domains', icon: 'M12 3l8 4v10l-8 4-8-4V7l8-4z' },
-  { href: '/landers', label: 'Landers', icon: 'M4 4h16v16H4z M8 8h8v8H8z' },
-  { href: '/traffic-sources', label: 'Traffic Sources', icon: 'M4 6h16M4 12h16M4 18h10' },
-  { href: '/integrations', label: 'Integrations', icon: 'M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83' },
-  { href: '/conversion-events', label: 'Event types', icon: 'M4 7h16M4 12h10M4 17h6' },
-  { href: '/traffic', label: 'Live Traffic', icon: 'M3 3v18h18M7 14l4-4 4 4 5-6' },
-  { href: '/clicks', label: 'Visits', icon: 'M15 15l6 6M10 17a7 7 0 1 1 0-14 7 7 0 0 1 0 14z' },
-  { href: '/performance', label: 'Performance', icon: 'M4 19h16M6 16l3-4 4 3 5-8 4 6' },
-  { href: '/placements', label: 'Placements', icon: 'M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z' },
-  { href: '/insights', label: 'Insights', icon: 'M4 19V5M4 19h16M8 15l3-4 4 3 5-7' },
-  { href: '/rules', label: 'Rules', icon: 'M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1' },
-  { href: '/conversions', label: 'Conversions', icon: 'M9 12l2 2 4-4M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z' },
+type NavLink = { href: string; label: string; icon: string };
+type NavGroup = { section: string; links: NavLink[] };
+
+const groups: NavGroup[] = [
+  {
+    section: 'Dashboard',
+    links: [
+      { href: '/overview', label: 'Overview', icon: 'M3 3v18h18M7 14l4-4 4 4 5-6' },
+      { href: '/insights', label: 'Insights', icon: 'M4 19V5M4 19h16M8 15l3-4 4 3 5-7' },
+    ],
+  },
+  {
+    section: 'Campaigns',
+    links: [
+      { href: '/', label: 'Campaigns', icon: 'M3 7h18M3 12h18M3 17h18' },
+      { href: '/landers', label: 'Landers', icon: 'M4 4h16v16H4z M8 8h8v8H8z' },
+      { href: '/domains', label: 'Domains', icon: 'M12 3l8 4v10l-8 4-8-4V7l8-4z' },
+    ],
+  },
+  {
+    section: 'Traffic',
+    links: [
+      { href: '/traffic-sources', label: 'Traffic Sources', icon: 'M4 6h16M4 12h16M4 18h10' },
+      { href: '/integrations', label: 'Integrations', icon: 'M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83' },
+    ],
+  },
+  {
+    section: 'Analytics',
+    links: [
+      { href: '/traffic', label: 'Live Traffic', icon: 'M3 3v18h18M7 14l4-4 4 4 5-6' },
+      { href: '/clicks', label: 'Visits', icon: 'M15 15l6 6M10 17a7 7 0 1 1 0-14 7 7 0 0 1 0 14z' },
+      { href: '/performance', label: 'Performance', icon: 'M4 19h16M6 16l3-4 4 3 5-8 4 6' },
+      { href: '/placements', label: 'Placements', icon: 'M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z' },
+      { href: '/funnel', label: 'LP Funnel', icon: 'M4 20V4M4 20h16M8 16l3-4 3 2 4-6' },
+    ],
+  },
+  {
+    section: 'Conversions',
+    links: [
+      { href: '/conversions', label: 'Conversions', icon: 'M9 12l2 2 4-4M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z' },
+      { href: '/conversion-events', label: 'Event types', icon: 'M4 7h16M4 12h10M4 17h6' },
+    ],
+  },
+  {
+    section: 'Automation',
+    links: [
+      { href: '/rules', label: 'Rules', icon: 'M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1' },
+      { href: '/alerts', label: 'Alerts', icon: 'M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0' },
+    ],
+  },
 ];
 
 function NavIcon({ d }: { d: string }) {
@@ -72,35 +106,42 @@ export function Sidebar({ userEmail }: { userEmail?: string | null }) {
           </div>
         </div>
 
-        <nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-3 py-5 space-y-4 overflow-y-auto">
           <NotificationBell />
-          {links.map((link) => {
-            const active =
-              link.href === '/'
-                ? pathname === '/'
-                : pathname === link.href || pathname.startsWith(`${link.href}/`);
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                aria-current={active ? 'page' : undefined}
-                className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 ${
-                  active
-                    ? 'bg-indigo-500/10 text-white shadow-sm'
-                    : 'text-zinc-400 hover:bg-zinc-900/80 hover:text-zinc-200'
-                }`}
-              >
-                {active && (
-                  <span
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full gradient-accent"
-                    aria-hidden
-                  />
-                )}
-                <NavIcon d={link.icon} />
-                {link.label}
-              </Link>
-            );
-          })}
+          {groups.map((group) => (
+            <div key={group.section} className="space-y-1">
+              <p className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">
+                {group.section}
+              </p>
+              {group.links.map((link) => {
+                const active =
+                  link.href === '/'
+                    ? pathname === '/'
+                    : pathname === link.href || pathname.startsWith(`${link.href}/`);
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    aria-current={active ? 'page' : undefined}
+                    className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 ${
+                      active
+                        ? 'bg-indigo-500/10 text-white shadow-sm'
+                        : 'text-zinc-400 hover:bg-zinc-900/80 hover:text-zinc-200'
+                    }`}
+                  >
+                    {active && (
+                      <span
+                        className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full gradient-accent"
+                        aria-hidden
+                      />
+                    )}
+                    <NavIcon d={link.icon} />
+                    {link.label}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <div className="px-4 py-5 border-t border-zinc-800/80 space-y-1">

@@ -762,6 +762,9 @@ export const trackerApi = {
       landerName: string;
       offerName: string;
       workspaceName: string;
+      redirectMode: 'http_302' | 'meta_refresh' | 'double_meta';
+      attributionWindowHours: number | null;
+      maxConversionsPerClick: number | null;
     }>,
   ) => api<Campaign>(`/api/campaigns/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCampaign: (id: string) =>

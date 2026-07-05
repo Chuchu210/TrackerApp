@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { AnalyticsTabs } from '@/components/AnalyticsTabs';
 import {
   Alert,
   Badge,
@@ -90,6 +91,7 @@ export default function TrafficPage() {
 
   return (
     <div>
+      <AnalyticsTabs />
       <PageHeader
         title="Live Traffic"
         description="Real-time overview with auto-refresh every 15 seconds."

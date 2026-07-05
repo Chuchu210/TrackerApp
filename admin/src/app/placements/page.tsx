@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { AnalyticsTabs } from '@/components/AnalyticsTabs';
 import { useToast } from '@/components/Toast';
 import {
   Alert,
@@ -10,6 +11,7 @@ import {
   DataTable,
   EmptyState,
   FilterBar,
+  InlineLink,
   Loading,
   PageHeader,
   Select,
@@ -118,6 +120,7 @@ export default function PlacementsPage() {
 
   return (
     <div>
+      <AnalyticsTabs />
       <PageHeader
         title="Placement Kill List"
         description="Find sites and publishers wasting budget. Block underperformers in Mediago."
@@ -185,7 +188,12 @@ export default function PlacementsPage() {
                   />
                 </Td>
                 <Td className="font-mono max-w-[160px] truncate">
-                  <span title={r.label}>{r.label}</span>
+                  <InlineLink
+                    href={`/clicks?${dimension === 'site' ? 'siteId' : 'publisher'}=${encodeURIComponent(r.key)}${campaignId ? `&campaignId=${campaignId}` : ''}`}
+                    title={`View visits for ${r.label}`}
+                  >
+                    {r.label}
+                  </InlineLink>
                 </Td>
                 <Td>{r.visits}</Td>
                 <Td>{r.events}</Td>

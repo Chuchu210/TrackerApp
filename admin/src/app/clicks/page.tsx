@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import { AnalyticsTabs } from '@/components/AnalyticsTabs';
 import {
   Alert,
   Badge,
@@ -91,6 +92,27 @@ export default function ClicksPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [excludeBots, setExcludeBots] = useState(false);
+
+  // Seed filters from the URL so drill-down links (e.g. from Placements) land pre-filtered.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const sp = new URLSearchParams(window.location.search);
+    const keys: (keyof Filters)[] = [
+      'campaignId',
+      'publisher',
+      'siteId',
+      'platform',
+      'country',
+      'adId',
+      'contentName',
+    ];
+    const seed: Partial<Filters> = {};
+    for (const k of keys) {
+      const v = sp.get(k);
+      if (v) seed[k] = v;
+    }
+    if (Object.keys(seed).length) setFilters((f) => ({ ...f, ...seed }));
+  }, []);
 
   const queryParams = useMemo(() => {
     const params: Record<string, string> = {
@@ -225,6 +247,7 @@ export default function ClicksPage() {
 
   return (
     <div>
+      <AnalyticsTabs />
       <PageHeader
         title="Visits"
         description="Analyze publisher and ad performance, bot traffic, and conversion quality."
