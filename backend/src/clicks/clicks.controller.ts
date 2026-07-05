@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { buildVisitorContextFromRequest } from './visitor-context.util';
 import { ClicksService } from './clicks.service';
 import { buildVisitorCookie } from '../common/utils/visitor-id';
+import { sendRedirect } from './send-redirect.util';
 
 @Controller()
 export class ClicksController {
@@ -16,9 +17,13 @@ export class ClicksController {
     @Res() res: Response,
   ) {
     const visitor = buildVisitorContextFromRequest(req, query);
-    const { destination, visitorId } = await this.clicksService.handleClick(slug, query, visitor);
+    const { destination, visitorId, redirectMode } = await this.clicksService.handleClick(
+      slug,
+      query,
+      visitor,
+    );
 
     res.append('Set-Cookie', buildVisitorCookie(visitorId, req.secure));
-    return res.redirect(302, destination);
+    return sendRedirect(res, destination, redirectMode);
   }
 }

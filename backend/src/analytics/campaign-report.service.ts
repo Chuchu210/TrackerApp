@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConversionEventTypesService } from '../conversion-event-types/conversion-event-types.service';
 import { getVisitStats } from './visit-stats';
+import { resolveReportTimezone } from '../shared/tracking/report-timezone';
 
 export type CampaignReportRow = {
   campaignId: string;
@@ -275,12 +276,25 @@ export class CampaignReportService {
     to?: string,
     granularity: 'hour' | 'day' = 'hour',
     campaignId?: string,
+    timezone?: string,
   ): Promise<TimeseriesPoint[]> {
     const { fromDate, toDate } = this.parseRange(from, to);
     const conversionSlugs = await this.eventTypes.getConversionCountSlugs();
     const slugList =
       conversionSlugs.length > 0 ? conversionSlugs : ['__no_conversion_slugs__'];
     const truncUnit = granularity === 'day' ? 'day' : 'hour';
+    const tz = resolveReportTimezone(timezone, process.env.REPORT_TIMEZONE);
+
+    // Bucket by report timezone. UTC keeps the legacy (no-conversion) behavior;
+    // other zones reinterpret the stored UTC timestamp into local wall-clock.
+    const clickBucketExpr =
+      tz === 'UTC'
+        ? Prisma.sql`date_trunc(${truncUnit}, created_at)`
+        : Prisma.sql`date_trunc(${truncUnit}, created_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})`;
+    const convBucketExpr =
+      tz === 'UTC'
+        ? Prisma.sql`date_trunc(${truncUnit}, cv.created_at)`
+        : Prisma.sql`date_trunc(${truncUnit}, cv.created_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})`;
 
     const clickConditions: Prisma.Sql[] = [
       Prisma.sql`created_at >= ${fromDate}`,
@@ -302,7 +316,7 @@ export class CampaignReportService {
 
     const [clickBuckets, conversionBuckets, spendRows] = await Promise.all([
       this.prisma.$queryRaw<Array<{ bucket: Date; visits: number }>>`
-        SELECT date_trunc(${truncUnit}, created_at) AS bucket, COUNT(*)::int AS visits
+        SELECT ${clickBucketExpr} AS bucket, COUNT(*)::int AS visits
         FROM clicks
         WHERE ${Prisma.join(clickConditions, ' AND ')}
         GROUP BY 1
@@ -313,10 +327,10 @@ export class CampaignReportService {
         Array<{ bucket: Date; conversions: number; revenue: number; cost: number }>
       >`
         SELECT
-          date_trunc(${truncUnit}, cv.created_at) AS bucket,
+          ${convBucketExpr} AS bucket,
           COUNT(*)::int AS conversions,
-          COALESCE(SUM(cv.revenue), 0)::float AS revenue,
-          COALESCE(SUM(cv.cost), 0)::float AS cost
+          COALESCE(SUM(COALESCE(cv.revenue_base, cv.revenue)), 0)::float AS revenue,
+          COALESCE(SUM(COALESCE(cv.cost_base, cv.cost)), 0)::float AS cost
         FROM conversions cv
         WHERE ${Prisma.join(convConditions, ' AND ')}
           AND cv.event_type IN (${Prisma.join(slugList)})

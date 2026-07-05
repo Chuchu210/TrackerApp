@@ -91,10 +91,34 @@ describe('Tracking flow unit tests', () => {
   });
 
   describe('isTestLeadFromQuestionnaireData', () => {
-    it('skips test leads', () => {
+    it('skips genuine test leads', () => {
+      expect(isTestLeadFromQuestionnaireData({ user_email: 'test@example.com' })).toBe(true);
+      expect(isTestLeadFromQuestionnaireData({ user_email: 'qa.user@example.com' })).toBe(true);
+      expect(isTestLeadFromQuestionnaireData({ user_email: 'someone@hipto.com' })).toBe(true);
+      expect(isTestLeadFromQuestionnaireData({ is_test_lead: true })).toBe(true);
       expect(
-        isTestLeadFromQuestionnaireData({ user_email: 'test@example.com' }),
+        isTestLeadFromQuestionnaireData({ user_email: 'a@b.com', firstName: 'Demo' }),
       ).toBe(true);
+    });
+
+    it('honors the allowlisted lead email', () => {
+      expect(isTestLeadFromQuestionnaireData({ user_email: 'lead@hipto.com' })).toBe(false);
+    });
+
+    it('does NOT drop real leads whose name/email merely contains a test token as a substring', () => {
+      // Regression: bare-substring matching used to drop all of these.
+      expect(
+        isTestLeadFromQuestionnaireData({ user_email: 'qasim.khan@gmail.com', firstName: 'Qasim', lastName: 'Khan' }),
+      ).toBe(false);
+      expect(
+        isTestLeadFromQuestionnaireData({ user_email: 'contest.winner@yahoo.com' }),
+      ).toBe(false);
+      expect(
+        isTestLeadFromQuestionnaireData({ user_email: 'demond.wright@gmail.com', firstName: 'Demond' }),
+      ).toBe(false);
+      expect(
+        isTestLeadFromQuestionnaireData({ user_email: 'raqa.ahmed@gmail.com', firstName: 'Raqa' }),
+      ).toBe(false);
     });
   });
 });

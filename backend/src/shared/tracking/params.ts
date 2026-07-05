@@ -42,6 +42,18 @@ export interface LeadEventData {
 
 const LEAD_TRACKING_ALLOWED_EMAIL = 'lead@hipto.com';
 
+/** QA/test markers matched as whole words — NOT bare substrings.
+ * Substring matching wrongly dropped real leads like "Qasim", "contest.winner@",
+ * "Demond", "Raqa" (the "qa"/"test"/"demo" substrings appear inside real names). */
+const TEST_TOKENS = ['test', 'fake', 'demo', 'qa'];
+
+/** Split on any non-alphanumeric boundary and check for a whole-word test token. */
+function containsTestToken(value: string): boolean {
+  if (!value) return false;
+  const words = value.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  return words.some((w) => TEST_TOKENS.includes(w));
+}
+
 /** Mediago/Voluum macros left unreplaced when URL is opened directly in a browser */
 export function isUnreplacedMacro(value?: string): boolean {
   if (!value) return false;
@@ -111,25 +123,14 @@ export function isTestLeadFromQuestionnaireData(data?: LeadEventData): boolean {
   const email = (data.user_email || '').trim().toLowerCase();
   if (email === LEAD_TRACKING_ALLOWED_EMAIL) return false;
 
-  const firstName = (data.firstName || '').trim().toLowerCase();
-  const lastName = (data.lastName || '').trim().toLowerCase();
+  const localPart = email.includes('@') ? email.slice(0, email.indexOf('@')) : email;
+  const domain = email.includes('@') ? email.slice(email.indexOf('@')) : '';
 
-  const isTestEmail =
-    email.includes('@hipto.com') ||
-    email.includes('test') ||
-    email.includes('fake') ||
-    email.includes('demo') ||
-    email.includes('qa');
+  // Known internal QA domain, or a whole-word test token in the email local part.
+  const isTestEmail = domain === '@hipto.com' || containsTestToken(localPart);
 
   const isTestName =
-    firstName.includes('test') ||
-    firstName.includes('fake') ||
-    firstName.includes('demo') ||
-    firstName.includes('qa') ||
-    lastName.includes('test') ||
-    lastName.includes('fake') ||
-    lastName.includes('demo') ||
-    lastName.includes('qa');
+    containsTestToken(data.firstName || '') || containsTestToken(data.lastName || '');
 
   return isTestEmail || isTestName;
 }

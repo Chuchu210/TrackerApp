@@ -15,8 +15,16 @@ describe('AppController', () => {
   });
 
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+    it('returns service status with ok=true', () => {
+      const status = appController.root();
+      expect(status.ok).toBe(true);
+      expect(status.service).toBe('tracker-api');
+    });
+  });
+
+  describe('health', () => {
+    it('returns the same status payload', () => {
+      expect(appController.health()).toEqual(appController.root());
     });
   });
 });

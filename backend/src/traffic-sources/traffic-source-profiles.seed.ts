@@ -29,6 +29,26 @@ const GOOGLE_MAPPINGS: ParamMapping[] = [
   { internalField: 'utm_term', displayLabel: 'UTM Term', externalKeys: ['utm_term'], showInReports: true, priority: 5 },
 ];
 
+const TABOOLA_MAPPINGS: ParamMapping[] = [
+  { internalField: 'tracking_id', displayLabel: 'Taboola Click ID', externalKeys: ['click_id', 'tblci', 'tracking_id'], urlMacro: '${click_id}', postbackToken: '{externalid}', showInReports: true, priority: 1 },
+  { internalField: 'site_id', displayLabel: 'Site', externalKeys: ['site', 'site_id', 'publisher_id'], urlMacro: '${site}', postbackToken: '{var5}', showInReports: true, priority: 2 },
+  { internalField: 'campaign_external_id', displayLabel: 'Campaign', externalKeys: ['campaign_id', 'campaign_item_id'], urlMacro: '${campaign_id}', postbackToken: '{var3}', showInReports: true, priority: 3 },
+  { internalField: 'ad_id', displayLabel: 'Ad', externalKeys: ['campaign_item_id', 'ad_id'], urlMacro: '${campaign_item_id}', postbackToken: '{var1}', showInReports: true, priority: 4 },
+];
+
+const MGID_MAPPINGS: ParamMapping[] = [
+  { internalField: 'tracking_id', displayLabel: 'MGID Click ID', externalKeys: ['click_id', 'subid', 'tracking_id'], urlMacro: '{click_id}', postbackToken: '{externalid}', showInReports: true, priority: 1 },
+  { internalField: 'site_id', displayLabel: 'Widget', externalKeys: ['widget_id', 'site_id'], urlMacro: '{widget_id}', postbackToken: '{var5}', showInReports: true, priority: 2 },
+  { internalField: 'ad_id', displayLabel: 'Teaser', externalKeys: ['teaser_id', 'ad_id'], urlMacro: '{teaser_id}', postbackToken: '{var1}', showInReports: true, priority: 3 },
+];
+
+const TIKTOK_MAPPINGS: ParamMapping[] = [
+  { internalField: 'external_click_id', displayLabel: 'TikTok Click ID', externalKeys: ['ttclid'], showInReports: true, priority: 1 },
+  { internalField: 'utm_source', displayLabel: 'UTM Source', externalKeys: ['utm_source'], showInReports: true, priority: 2 },
+  { internalField: 'utm_campaign', displayLabel: 'UTM Campaign', externalKeys: ['utm_campaign'], showInReports: true, priority: 3 },
+  { internalField: 'utm_content', displayLabel: 'UTM Content', externalKeys: ['utm_content'], showInReports: true, priority: 4 },
+];
+
 export interface SeedProfile {
   slug: string;
   name: string;
@@ -137,6 +157,106 @@ export const SYSTEM_TRAFFIC_SOURCE_PROFILES: SeedProfile[] = [
     },
     setupNote:
       'Put the Direct Ad URL in Google Ads (final URL). Google adds gclid automatically. Add the LP script to your landing page.',
+    isSystem: true,
+  },
+  {
+    slug: 'taboola',
+    name: 'Taboola',
+    trackingModeDefault: TrackingMode.redirect,
+    clickUrlTemplate:
+      '{clickUrl}?click_id=${click_id}&site=${site}&campaign_id=${campaign_id}&campaign_item_id=${campaign_item_id}&cost=${cpc}&utm_source=taboola',
+    directAdUrlTemplate: null,
+    paramMappings: TABOOLA_MAPPINGS,
+    conversionMethod: ConversionMethod.generic_postback,
+    postbackDefaults: {
+      mediagoEnabled: false,
+      facebookEnabled: false,
+      googleEnabled: false,
+      postbackUrlTemplate:
+        'https://trc.taboola.com/actions-handler/log/3/s2s-action?click-id={externalid}&name={eventType}&revenue={payout}&currency={payout.currency}',
+    },
+    setupNote:
+      'Put the redirect Click URL in Taboola. Uses ${click_id} + ${cpc} for auto-cost. Configure the Taboola S2S postback.',
+    isSystem: true,
+  },
+  {
+    slug: 'mgid',
+    name: 'MGID',
+    trackingModeDefault: TrackingMode.redirect,
+    clickUrlTemplate:
+      '{clickUrl}?click_id={click_id}&widget_id={widget_id}&teaser_id={teaser_id}&cost={click_price}&utm_source=mgid',
+    directAdUrlTemplate: null,
+    paramMappings: MGID_MAPPINGS,
+    conversionMethod: ConversionMethod.generic_postback,
+    postbackDefaults: {
+      mediagoEnabled: false,
+      facebookEnabled: false,
+      googleEnabled: false,
+      postbackUrlTemplate:
+        'https://a.mgid.com/postback?click_id={externalid}&price={payout}',
+    },
+    setupNote:
+      'Put the redirect Click URL in MGID. Uses {click_id} + {click_price} for auto-cost. Configure the MGID postback.',
+    isSystem: true,
+  },
+  {
+    slug: 'newsbreak',
+    name: 'NewsBreak',
+    trackingModeDefault: TrackingMode.redirect,
+    clickUrlTemplate:
+      '{clickUrl}?click_id=${CLICK_ID}&ad_id=${AD_ID}&campaign_id=${CAMPAIGN_ID}&cost=${BID_PRICE}&utm_source=newsbreak',
+    directAdUrlTemplate: null,
+    paramMappings: DEFAULT_PARAM_MAPPINGS,
+    conversionMethod: ConversionMethod.generic_postback,
+    postbackDefaults: {
+      mediagoEnabled: false,
+      facebookEnabled: false,
+      googleEnabled: false,
+      postbackUrlTemplate:
+        'https://api.newsbreak.com/adx/s2s/conversion?click_id={externalid}&value={payout}',
+    },
+    setupNote:
+      'Put the redirect Click URL in NewsBreak. Uses ${BID_PRICE} for auto-cost. Configure the NewsBreak S2S postback.',
+    isSystem: true,
+  },
+  {
+    slug: 'tiktok',
+    name: 'TikTok',
+    trackingModeDefault: TrackingMode.direct,
+    clickUrlTemplate: null,
+    directAdUrlTemplate:
+      '{destinationUrl}?utm_source=tiktok&utm_medium=paid_social&utm_campaign={campaignName}&ttclid=__CLICKID__',
+    paramMappings: TIKTOK_MAPPINGS,
+    conversionMethod: ConversionMethod.generic_postback,
+    postbackDefaults: {
+      mediagoEnabled: false,
+      facebookEnabled: false,
+      googleEnabled: false,
+      requiredMetadata: ['ttclid'],
+      postbackUrlTemplate:
+        'POST https://business-api.tiktok.com/open_api/v1.3/event/track/ (Events API — configure pixel + token on campaign)',
+    },
+    setupNote:
+      'Put the Direct Ad URL in TikTok (TikTok fills ttclid). Add the LP script to your landing page.',
+    isSystem: true,
+  },
+  {
+    slug: 'affiliate-generic',
+    name: 'Affiliate Network (generic S2S)',
+    trackingModeDefault: TrackingMode.redirect,
+    clickUrlTemplate: '{clickUrl}?click_id=${SUBID}&cost=${COST}',
+    directAdUrlTemplate: null,
+    paramMappings: DEFAULT_PARAM_MAPPINGS,
+    conversionMethod: ConversionMethod.generic_postback,
+    postbackDefaults: {
+      mediagoEnabled: false,
+      facebookEnabled: false,
+      googleEnabled: false,
+      postbackUrlTemplate:
+        'https://YOUR-NETWORK.com/postback?subid={externalid}&payout={payout}&txid={transaction.id}',
+    },
+    setupNote:
+      'Generic template for any affiliate network that supports a click/subid macro and an S2S postback. Edit the postback URL to match your network.',
     isSystem: true,
   },
 ];

@@ -1,5 +1,5 @@
 import { IsString, IsUrl, IsEnum, IsOptional, IsBoolean, IsNumber } from 'class-validator';
-import { TrafficSource, TrackingMode } from '@prisma/client';
+import { TrafficSource, TrackingMode, RedirectMode } from '@prisma/client';
 
 export class CreateCampaignDto {
   @IsString()
@@ -23,6 +23,10 @@ export class CreateCampaignDto {
   @IsOptional()
   @IsEnum(TrackingMode)
   trackingMode?: TrackingMode;
+
+  @IsOptional()
+  @IsEnum(RedirectMode)
+  redirectMode?: RedirectMode;
 
   @IsOptional()
   @IsString()
@@ -74,6 +78,14 @@ export class CreateCampaignDto {
   @IsOptional()
   @IsString()
   affiliateNetworkId?: string;
+
+  @IsOptional()
+  @IsNumber()
+  attributionWindowHours?: number;
+
+  @IsOptional()
+  @IsNumber()
+  maxConversionsPerClick?: number;
 }
 
 export class UpdateCampaignDto {
@@ -100,6 +112,10 @@ export class UpdateCampaignDto {
   @IsOptional()
   @IsEnum(TrackingMode)
   trackingMode?: TrackingMode;
+
+  @IsOptional()
+  @IsEnum(RedirectMode)
+  redirectMode?: RedirectMode;
 
   @IsOptional()
   @IsString()
@@ -152,6 +168,14 @@ export class UpdateCampaignDto {
   @IsOptional()
   @IsString()
   affiliateNetworkId?: string;
+
+  @IsOptional()
+  @IsNumber()
+  attributionWindowHours?: number;
+
+  @IsOptional()
+  @IsNumber()
+  maxConversionsPerClick?: number;
 }
 
 export class UpdatePostbackConfigDto {
@@ -194,4 +218,8 @@ export class UpdatePostbackConfigDto {
   @IsOptional()
   @IsBoolean()
   googleEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  postbackSecret?: string;
 }

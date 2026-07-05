@@ -66,8 +66,9 @@ export class AnalyticsController {
     @Query('to') to?: string,
     @Query('granularity') granularity?: 'hour' | 'day',
     @Query('campaignId') campaignId?: string,
+    @Query('tz') tz?: string,
   ) {
-    return this.campaignReport.getTimeseries(from, to, granularity || 'hour', campaignId);
+    return this.campaignReport.getTimeseries(from, to, granularity || 'hour', campaignId, tz);
   }
 
   @Get('breakdown')

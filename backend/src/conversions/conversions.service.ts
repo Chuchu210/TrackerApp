@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ConversionStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PostbacksService } from '../postbacks/postbacks.service';
@@ -11,13 +17,64 @@ import {
   type ParamMapping,
 } from '../shared/tracking/param-mapping';
 import { normalizeEventType } from '../common/utils/normalize-event-type';
+import {
+  isPostbackAuthorized,
+  parseIpAllowlist,
+  extractProvidedSecret,
+} from '../shared/tracking/postback-auth';
+import {
+  isWithinAttributionWindow,
+  isConversionCapReached,
+} from '../shared/tracking/attribution';
+import { buildFxConfig, normalizeToBase } from '../shared/tracking/currency';
 
 @Injectable()
 export class ConversionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly postbacks: PostbacksService,
+    private readonly config: ConfigService,
   ) {}
+
+  /**
+   * Guard the server-to-server postback path. When the resolved click's campaign
+   * has a `postbackSecret` set, or a global POSTBACK_IP_ALLOWLIST is configured,
+   * the request must satisfy one of them — otherwise anyone who knows a clickId
+   * could inject conversions. Campaigns with neither configured stay open
+   * (backward compatible) so nothing breaks until a secret is set.
+   */
+  private async assertPostbackAuthorized(
+    resolvedClickId: string | undefined,
+    query: Record<string, string | string[] | undefined> = {},
+    context?: ConversionContext,
+  ): Promise<void> {
+    const ipAllowlist = parseIpAllowlist(
+      this.config.get<string>('POSTBACK_IP_ALLOWLIST'),
+    );
+
+    let expectedSecret: string | null = null;
+    if (resolvedClickId) {
+      const click = await this.prisma.click.findUnique({
+        where: { clickId: resolvedClickId },
+        select: { campaign: { select: { postbackConfig: { select: { postbackSecret: true } } } } },
+      });
+      expectedSecret = click?.campaign.postbackConfig?.postbackSecret ?? null;
+    }
+
+    // Nothing to enforce for this campaign and no global allowlist — stay open.
+    if (!expectedSecret && ipAllowlist.length === 0) return;
+
+    const result = isPostbackAuthorized({
+      expectedSecret,
+      providedSecret: extractProvidedSecret(query),
+      ip: context?.incomingPostbackIp,
+      ipAllowlist,
+    });
+
+    if (!result.ok) {
+      throw new ForbiddenException('Postback not authorized');
+    }
+  }
 
   async create(dto: CreateConversionDto, context?: ConversionContext) {
     if (
@@ -36,6 +93,17 @@ export class ConversionsService {
       throw new NotFoundException('Click not found for provided clickId or trackingId');
     }
 
+    // Attribution window: reject conversions that land too long after the click.
+    if (
+      !isWithinAttributionWindow(
+        click.createdAt,
+        new Date(),
+        click.campaign?.attributionWindowHours,
+      )
+    ) {
+      return { skipped: true, reason: 'outside_attribution_window' };
+    }
+
     const eventType = normalizeEventType(dto.eventType);
 
     const existing = await this.prisma.conversion.findUnique({
@@ -47,15 +115,34 @@ export class ConversionsService {
       return { conversion: full, duplicate: true };
     }
 
+    // Per-click conversion cap (across all event types) to curb injection/abuse.
+    if (click.campaign?.maxConversionsPerClick != null) {
+      const existingCount = await this.prisma.conversion.count({
+        where: { clickId: click.clickId },
+      });
+      if (isConversionCapReached(existingCount, click.campaign.maxConversionsPerClick)) {
+        return { skipped: true, reason: 'conversion_cap_reached' };
+      }
+    }
+
+    const fx = buildFxConfig(
+      this.config.get<string>('BASE_CURRENCY'),
+      this.config.get<string>('FX_RATES'),
+    );
+    const revenue = dto.revenue || 0;
+    const cost = dto.cost || 0;
+
     const conversion = await this.prisma.conversion.create({
       data: {
         clickId: click.clickId,
         campaignId: click.campaignId,
         eventType,
-        revenue: dto.revenue || 0,
+        revenue,
         totalRevenue: dto.totalRevenue ?? dto.revenue ?? 0,
-        cost: dto.cost || 0,
+        cost,
         currency: dto.currency || null,
+        revenueBase: normalizeToBase(revenue, dto.currency, fx),
+        costBase: normalizeToBase(cost, dto.currency, fx),
         transactionId: dto.transactionId || null,
         status: ConversionStatus.pending,
         metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
@@ -95,6 +182,8 @@ export class ConversionsService {
       get('clickId') ||
       get('tk-cid') ||
       get('tk_cid');
+
+    await this.assertPostbackAuthorized(resolvedClickId, query, context);
 
     return this.create(
       {
@@ -196,14 +285,26 @@ export class ConversionsService {
   }
 
   private async findClick(dto: CreateConversionDto) {
+    // Carry the campaign's attribution settings so create() can enforce
+    // window/cap without a second round-trip.
+    const includeCampaign = {
+      campaign: {
+        select: { attributionWindowHours: true, maxConversionsPerClick: true },
+      },
+    } as const;
+
     if (dto.clickId) {
-      return this.prisma.click.findUnique({ where: { clickId: dto.clickId } });
+      return this.prisma.click.findUnique({
+        where: { clickId: dto.clickId },
+        include: includeCampaign,
+      });
     }
 
     if (dto.trackingId) {
       return this.prisma.click.findFirst({
         where: { trackingId: dto.trackingId },
         orderBy: { createdAt: 'desc' },
+        include: includeCampaign,
       });
     }
 
@@ -217,6 +318,7 @@ export class ConversionsService {
           ],
         },
         orderBy: { createdAt: 'desc' },
+        include: includeCampaign,
       });
     }
 
