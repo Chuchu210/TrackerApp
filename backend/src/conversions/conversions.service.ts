@@ -27,6 +27,7 @@ import {
   isConversionCapReached,
 } from '../shared/tracking/attribution';
 import { buildFxConfig, normalizeToBase } from '../shared/tracking/currency';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class ConversionsService {
@@ -34,6 +35,7 @@ export class ConversionsService {
     private readonly prisma: PrismaService,
     private readonly postbacks: PostbacksService,
     private readonly config: ConfigService,
+    private readonly settings: SettingsService,
   ) {}
 
   /**
@@ -125,10 +127,8 @@ export class ConversionsService {
       }
     }
 
-    const fx = buildFxConfig(
-      this.config.get<string>('BASE_CURRENCY'),
-      this.config.get<string>('FX_RATES'),
-    );
+    const settings = await this.settings.getEffective();
+    const fx = buildFxConfig(settings.baseCurrency, settings.fxRates);
     const revenue = dto.revenue || 0;
     const cost = dto.cost || 0;
 

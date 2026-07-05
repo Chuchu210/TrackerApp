@@ -7,6 +7,31 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// Single-row global settings, editable from the admin UI. Any null field
+/// falls back to the matching environment variable, then a built-in default.
+model AppSettings {
+  id String @id @default("singleton")
+
+  // Notifications
+  telegramBotToken String? @map("telegram_bot_token")
+  telegramChatId   String? @map("telegram_chat_id")
+  notifyWebhookUrl String? @map("notify_webhook_url")
+  notifyMinSeverity String? @map("notify_min_severity")
+
+  // Currency + timezone
+  baseCurrency   String? @map("base_currency")
+  fxRates        String? @map("fx_rates")
+  reportTimezone String? @map("report_timezone")
+
+  // Anti-fraud velocity
+  fraudVelocityWindowSeconds Int? @map("fraud_velocity_window_seconds")
+  fraudVelocityMaxClicks     Int? @map("fraud_velocity_max_clicks")
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
+
 enum TrafficSource {
   mediago
   facebook

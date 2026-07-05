@@ -34,6 +34,7 @@ import { IpEnrichmentService } from './ip-enrichment.service';
 import { isPrivateOrLoopback } from '../shared/tracking/ip-resolver';
 import { fingerprintVisitorId } from '../common/utils/visitor-id';
 import { ConversionEventTypesService } from '../conversion-event-types/conversion-event-types.service';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class ClicksService {
@@ -44,6 +45,7 @@ export class ClicksService {
     private readonly geoIp: GeoIpService,
     private readonly ipEnrichment: IpEnrichmentService,
     private readonly eventTypes: ConversionEventTypesService,
+    private readonly settings: SettingsService,
   ) {}
 
   async registerDirectVisit(
@@ -253,9 +255,10 @@ export class ClicksService {
    * FRAUD_VELOCITY_* env or disable by setting the max to 0.
    */
   private async evaluateVelocity(ipAddress?: string) {
+    const settings = await this.settings.getEffective();
     const config = parseVelocityConfig(
-      this.config.get<string>('FRAUD_VELOCITY_WINDOW_SECONDS'),
-      this.config.get<string>('FRAUD_VELOCITY_MAX_CLICKS'),
+      settings.fraudVelocityWindowSeconds,
+      settings.fraudVelocityMaxClicks,
     );
     if (!ipAddress || isPrivateOrLoopback(ipAddress) || config.maxClicks <= 0) {
       return { exceeded: false, score: 0 };

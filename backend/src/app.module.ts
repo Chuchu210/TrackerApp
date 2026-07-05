@@ -19,12 +19,14 @@ import { TargetsModule } from './targets/targets.module';
 import { PlacementsModule } from './placements/placements.module';
 import { RulesModule } from './rules/rules.module';
 import { PathsModule } from './paths/paths.module';
+import { SettingsModule } from './settings/settings.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     PrismaModule,
+    SettingsModule,
     ClicksModule,
     ConversionsModule,
     PostbacksModule,

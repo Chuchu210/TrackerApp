@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConversionEventTypesService } from '../conversion-event-types/conversion-event-types.service';
 import { getVisitStats } from './visit-stats';
 import { resolveReportTimezone } from '../shared/tracking/report-timezone';
+import { SettingsService } from '../settings/settings.service';
 
 export type CampaignReportRow = {
   campaignId: string;
@@ -78,6 +79,7 @@ export class CampaignReportService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventTypes: ConversionEventTypesService,
+    private readonly settings: SettingsService,
   ) {}
 
   private parseRange(from?: string, to?: string) {
@@ -283,7 +285,10 @@ export class CampaignReportService {
     const slugList =
       conversionSlugs.length > 0 ? conversionSlugs : ['__no_conversion_slugs__'];
     const truncUnit = granularity === 'day' ? 'day' : 'hour';
-    const tz = resolveReportTimezone(timezone, process.env.REPORT_TIMEZONE);
+    const tz = resolveReportTimezone(
+      timezone,
+      (await this.settings.getEffective()).reportTimezone,
+    );
 
     // Bucket by report timezone. UTC keeps the legacy (no-conversion) behavior;
     // other zones reinterpret the stored UTC timestamp into local wall-clock.
