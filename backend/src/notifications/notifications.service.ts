@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { SettingsService } from '../settings/settings.service';
 import {
   AlertLike,
   buildWebhookPayload,
@@ -23,27 +23,25 @@ export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
   constructor(
-    private readonly config: ConfigService,
+    private readonly settings: SettingsService,
     private readonly http: HttpService,
   ) {}
 
-  private minSeverity(): string {
-    return (this.config.get<string>('NOTIFY_MIN_SEVERITY') || 'warning').toLowerCase();
-  }
-
   async dispatchAlert(alert: AlertLike): Promise<void> {
     try {
-      if (!meetsMinSeverity(alert.severity, this.minSeverity())) return;
+      const cfg = await this.settings.getEffective();
+      if (!meetsMinSeverity(alert.severity, cfg.notifyMinSeverity)) return;
 
-      await Promise.all([this.sendTelegram(alert), this.sendWebhook(alert)]);
+      await Promise.all([
+        this.sendTelegram(alert, cfg.telegramBotToken, cfg.telegramChatId),
+        this.sendWebhook(alert, cfg.notifyWebhookUrl),
+      ]);
     } catch (err) {
       this.logger.warn(`Notification dispatch failed: ${(err as Error).message}`);
     }
   }
 
-  private async sendTelegram(alert: AlertLike): Promise<void> {
-    const token = this.config.get<string>('TELEGRAM_BOT_TOKEN');
-    const chatId = this.config.get<string>('TELEGRAM_CHAT_ID');
+  private async sendTelegram(alert: AlertLike, token: string, chatId: string): Promise<void> {
     if (!token || !chatId) return;
 
     try {
@@ -59,8 +57,7 @@ export class NotificationsService {
     }
   }
 
-  private async sendWebhook(alert: AlertLike): Promise<void> {
-    const url = this.config.get<string>('NOTIFY_WEBHOOK_URL');
+  private async sendWebhook(alert: AlertLike, url: string): Promise<void> {
     if (!url) return;
 
     try {

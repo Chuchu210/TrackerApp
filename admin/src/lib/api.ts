@@ -660,6 +660,18 @@ export interface LanderSuggestion {
   verifiedDomains: { id: string; label: string; rootDomain: string; hostname: string }[];
 }
 
+export interface AppSettings {
+  telegramBotToken: string | null;
+  telegramChatId: string | null;
+  notifyWebhookUrl: string | null;
+  notifyMinSeverity: string | null;
+  baseCurrency: string | null;
+  fxRates: string | null;
+  reportTimezone: string | null;
+  fraudVelocityWindowSeconds: number | null;
+  fraudVelocityMaxClicks: number | null;
+}
+
 export interface PathCondition {
   dimension: 'country' | 'device' | 'os' | 'browser' | 'connectionType';
   operator: 'in' | 'not_in';
@@ -1078,4 +1090,9 @@ export const trackerApi = {
     api<{ pathsEvaluated: number; winnersPicked: number }>(`/api/paths/auto-winner/run`, {
       method: 'POST',
     }),
+
+  // Global settings (notifications, currency/FX, timezone, fraud thresholds).
+  getSettings: () => api<AppSettings>('/api/settings'),
+  updateSettings: (data: Partial<AppSettings>) =>
+    api<AppSettings>('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
 };
