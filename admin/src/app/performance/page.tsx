@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { AnalyticsTabs } from '@/components/AnalyticsTabs';
 import {
   Alert,
   Badge,
@@ -128,6 +129,7 @@ export default function PerformancePage() {
 
   return (
     <div>
+      <AnalyticsTabs />
       <PageHeader
         title="Creative Performance"
         description="Image vs headline analysis with automated recommendations. Optimize for a specific LP event — uses asset_id (image) and ad_title (headline) from your click URL."

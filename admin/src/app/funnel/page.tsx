@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { AnalyticsTabs } from '@/components/AnalyticsTabs';
 import {
   Button,
   Card,
@@ -71,6 +72,7 @@ export default function FunnelPage() {
 
   return (
     <div>
+      <AnalyticsTabs />
       <PageHeader
         title="LP Funnel"
         description="Track where visitors drop off — View Content, button clicks, calls, leads, and outbound Mediago postbacks at each step."
