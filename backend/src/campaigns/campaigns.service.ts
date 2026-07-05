@@ -45,6 +45,7 @@ export class CampaignsService {
         trafficSourceProfileId: profile.id,
         trackingMode:
           dto.trackingMode || profile.trackingModeDefault || TrackingMode.redirect,
+        redirectMode: dto.redirectMode,
         trafficSourceName: dto.trafficSourceName || profile.name,
         trafficSourceId: dto.trafficSourceId,
         workspaceName: dto.workspaceName,
@@ -55,6 +56,8 @@ export class CampaignsService {
         offerName: dto.offerName,
         affiliateNetwork: dto.affiliateNetwork,
         affiliateNetworkId: dto.affiliateNetworkId,
+        attributionWindowHours: dto.attributionWindowHours,
+        maxConversionsPerClick: dto.maxConversionsPerClick,
         destinationUrl: dto.destinationUrl,
         active: dto.active ?? true,
         postbackConfig: { create: postbackDefaults },

@@ -34,10 +34,8 @@ export class TrackerScriptController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const query: Record<string, string> = { ...(dto.params || {}) };
-    if (process.env.ALLOW_TEST_IP_OVERRIDE === 'true' && query.__test_ip) {
-      // keep for local dev
-    }
-
+    // Test-IP override (?__test_ip=) is honored inside buildVisitorContextFromRequest
+    // when ALLOW_TEST_IP_OVERRIDE=true — no special handling needed here.
     const visitor = buildVisitorContextFromRequest(req, query);
     if (dto.visitorId) {
       visitor.visitorId = dto.visitorId;

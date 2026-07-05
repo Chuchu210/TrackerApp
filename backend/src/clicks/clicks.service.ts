@@ -18,6 +18,13 @@ import {
 } from '../shared/tracking/voluum-fields';
 import { detectBot } from '../shared/tracking/bot-detector';
 import {
+  evaluateClickVelocity,
+  mergeBotSignals,
+  parseVelocityConfig,
+} from '../shared/tracking/velocity';
+import { resolveRouting, type RoutablePath } from '../shared/tracking/routing';
+import { parseClickCost, parseClickCostKeys } from '../shared/tracking/click-cost';
+import {
   inferConnectionType,
   type VisitorContext,
 } from '../shared/tracking/request-context';
@@ -66,13 +73,10 @@ export class ClicksService {
     query: Record<string, string | string[] | undefined>,
     visitor: VisitorContext,
   ) {
-    const { clickId, campaign, visitorId, utmSource } = await this.recordClick(
-      identifier,
-      query,
-      visitor,
-    );
+    const { clickId, campaign, visitorId, utmSource, routedDestination } =
+      await this.recordClick(identifier, query, visitor);
 
-    const destination = new URL(campaign.destinationUrl);
+    const destination = new URL(routedDestination);
 
     for (const [key, value] of Object.entries(query)) {
       if (key.toLowerCase() === '__test_ip') continue;
@@ -93,6 +97,7 @@ export class ClicksService {
       utmSource,
       trafficSource: campaign.trafficSource,
       campaignSlug: campaign.slug,
+      redirectMode: campaign.redirectMode,
     };
   }
 
@@ -129,13 +134,29 @@ export class ClicksService {
       undefined,
       visitor.headers.secChUaMobile,
     );
-    const bot = detectBot({
+    const baseBot = detectBot({
       userAgent,
       acceptLanguage,
       hasSecFetchHeaders: Boolean(
         visitor.headers.secFetchDest || visitor.headers.secFetchMode,
       ),
     });
+    const velocity = await this.evaluateVelocity(ipAddress);
+    const bot = mergeBotSignals(baseBot, velocity);
+
+    // Traffic routing: pick a path (rules) and rotate a variant (offer/lander).
+    // With no paths configured this resolves to campaign.destinationUrl (legacy).
+    const routing = resolveRouting(
+      campaign.destinationUrl,
+      (campaign.paths || []) as unknown as RoutablePath[],
+      {
+        country: geo.countryCode,
+        device: device.device,
+        os: device.os,
+        browser: device.browser,
+        connectionType,
+      },
+    );
 
     const { visitorId, isNewVisitor } = await this.resolveVisitor(campaign.id, visitor);
 
@@ -157,7 +178,8 @@ export class ClicksService {
         contentName: params.content_name || null,
         platform: params.platform || null,
         assetId: params.asset_id || null,
-        pathId: voluum.pathId || null,
+        pathId: routing.pathId || voluum.pathId || null,
+        variantId: routing.variantId || null,
         landerId: voluum.landerId || campaign.landerId || null,
         landerName: voluum.landerName || campaign.landerName || null,
         offerId: voluum.offerId || campaign.offerId || null,
@@ -196,6 +218,10 @@ export class ClicksService {
         browser: device.browser,
         browserVersion: device.browserVersion,
         connectionType,
+        cost: parseClickCost(
+          rawParams,
+          parseClickCostKeys(this.config.get<string>('CLICK_COST_KEYS')),
+        ),
         isBot: bot.isBot,
         botScore: bot.score,
         botReasons: bot.reasons as Prisma.InputJsonValue,
@@ -210,7 +236,35 @@ export class ClicksService {
 
     this.ipEnrichment.enrichClickAsync(clickId, ipAddress, userAgent, acceptLanguage);
 
-    return { clickId, campaign, visitorId, isNewVisitor, utmSource: params.utm_source || null };
+    return {
+      clickId,
+      campaign,
+      visitorId,
+      isNewVisitor,
+      utmSource: params.utm_source || null,
+      routedDestination: routing.destination,
+    };
+  }
+
+  /**
+   * Click-flood detection: count clicks from this IP within the sliding window
+   * and turn that into a bot-score contribution. Skipped for private/loopback
+   * IPs (local dev). One count query per click — tune the window/threshold via
+   * FRAUD_VELOCITY_* env or disable by setting the max to 0.
+   */
+  private async evaluateVelocity(ipAddress?: string) {
+    const config = parseVelocityConfig(
+      this.config.get<string>('FRAUD_VELOCITY_WINDOW_SECONDS'),
+      this.config.get<string>('FRAUD_VELOCITY_MAX_CLICKS'),
+    );
+    if (!ipAddress || isPrivateOrLoopback(ipAddress) || config.maxClicks <= 0) {
+      return { exceeded: false, score: 0 };
+    }
+    const since = new Date(Date.now() - config.windowSeconds * 1000);
+    const recentCount = await this.prisma.click.count({
+      where: { ipAddress, createdAt: { gte: since } },
+    });
+    return evaluateClickVelocity(recentCount, config);
   }
 
   private async resolveVisitor(
@@ -260,7 +314,10 @@ export class ClicksService {
         OR: [{ slug: identifier }, { externalId: identifier }, { id: identifier }],
         active: true,
       },
-      include: { trafficSourceProfile: true },
+      include: {
+        trafficSourceProfile: true,
+        paths: { where: { active: true }, include: { variants: { where: { active: true } } } },
+      },
     });
 
     if (!campaign) {

@@ -6,6 +6,7 @@ import { ConversionsService } from '../conversions/conversions.service';
 import { buildVisitorCookie } from '../common/utils/visitor-id';
 import { isMediagoTrafficSource } from '../shared/tracking/mediago-conversion-types';
 import { shouldSendAutoViewContent } from '../shared/tracking/auto-view-content';
+import { sendRedirect } from './send-redirect.util';
 
 const RESERVED = new Set(['api', 't', 'conversions', 'postback', 'click', 'health', 'favicon.ico']);
 
@@ -29,7 +30,7 @@ export class VoluumRedirectController {
     }
 
     const visitor = buildVisitorContextFromRequest(req, query);
-    const { destination, visitorId, clickId, utmSource, trafficSource, campaignSlug } =
+    const { destination, visitorId, clickId, utmSource, trafficSource, campaignSlug, redirectMode } =
       await this.clicksService.handleClick(identifier, query, visitor);
 
     const mediago =
@@ -55,6 +56,6 @@ export class VoluumRedirectController {
     }
 
     res.append('Set-Cookie', buildVisitorCookie(visitorId, req.secure));
-    return res.redirect(302, destination);
+    return sendRedirect(res, destination, redirectMode);
   }
 }

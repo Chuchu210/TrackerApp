@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PlacementAnalyticsService } from '../analytics/placement-analytics.service';
 import { CampaignReportService } from '../analytics/campaign-report.service';
 import { TargetsService } from '../targets/targets.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class RulesEngineService {
@@ -15,6 +16,7 @@ export class RulesEngineService {
     private readonly placements: PlacementAnalyticsService,
     private readonly campaignReport: CampaignReportService,
     private readonly targets: TargetsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   @Cron('0 * * * *')
@@ -204,6 +206,8 @@ export class RulesEngineService {
     });
     if (existing) return;
 
-    await this.prisma.alertEvent.create({ data: input });
+    const alert = await this.prisma.alertEvent.create({ data: input });
+    // Best-effort external delivery (Telegram/webhook); never blocks alert creation.
+    void this.notifications.dispatchAlert(alert);
   }
 }

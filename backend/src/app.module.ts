@@ -18,6 +18,7 @@ import { LandersModule } from './landers/landers.module';
 import { TargetsModule } from './targets/targets.module';
 import { PlacementsModule } from './placements/placements.module';
 import { RulesModule } from './rules/rules.module';
+import { PathsModule } from './paths/paths.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { RulesModule } from './rules/rules.module';
     TargetsModule,
     PlacementsModule,
     RulesModule,
+    PathsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

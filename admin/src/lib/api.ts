@@ -80,6 +80,8 @@ export interface Campaign {
   trafficSourceProfileId?: string;
   trafficSourceProfile?: TrafficSourceProfile | null;
   trackingMode: 'redirect' | 'direct';
+  /** Referrer-hiding redirect mode for the click hop. */
+  redirectMode?: 'http_302' | 'meta_refresh' | 'double_meta';
   destinationUrl: string;
   active: boolean;
   domainId?: string;
@@ -93,6 +95,10 @@ export interface Campaign {
   landerName?: string;
   offerName?: string;
   workspaceName?: string;
+  /** Reject conversions older than N hours after the click (null = no window). */
+  attributionWindowHours?: number;
+  /** Cap total conversions per click (null = unlimited). */
+  maxConversionsPerClick?: number;
   clickUrl: string;
   trackingTemplate: string;
   /** GET URL template to fire when a lead converts (uses this campaign's tracking domain) */
@@ -113,6 +119,8 @@ export interface PostbackConfig {
   googleConversionLabel?: string;
   googlePostbackUrl?: string;
   googleEnabled: boolean;
+  /** Shared secret an affiliate network must present on incoming S2S postbacks. */
+  postbackSecret?: string;
 }
 
 export interface Click {
@@ -652,6 +660,34 @@ export interface LanderSuggestion {
   verifiedDomains: { id: string; label: string; rootDomain: string; hostname: string }[];
 }
 
+export interface PathCondition {
+  dimension: 'country' | 'device' | 'os' | 'browser' | 'connectionType';
+  operator: 'in' | 'not_in';
+  values: string[];
+}
+
+export interface PathVariant {
+  id: string;
+  pathId: string;
+  label: string;
+  kind: 'offer' | 'lander';
+  destinationUrl: string;
+  weight: number;
+  active: boolean;
+  isWinner: boolean;
+}
+
+export interface CampaignPath {
+  id: string;
+  campaignId: string;
+  name: string;
+  weight: number;
+  active: boolean;
+  conditions: PathCondition[];
+  destinationUrl?: string | null;
+  variants: PathVariant[];
+}
+
 async function adminRaw(path: string, options: RequestInit = {}) {
   const proxyPath = path.startsWith('/api/') ? path.slice(5) : path.replace(/^\//, '');
   const res = await fetch(`/api/admin/${proxyPath}`, options);
@@ -1013,4 +1049,30 @@ export const trackerApi = {
       `/api/integrations/mediago/campaigns/${campaignId}/budget`,
       { method: 'POST', body: JSON.stringify({ budget }) },
     ),
+
+  // Traffic routing: paths (weighted, rule-targeted) + rotatable offer/lander variants.
+  getCampaignPaths: (campaignId: string) =>
+    api<CampaignPath[]>(`/api/campaigns/${campaignId}/paths`),
+  createPath: (campaignId: string, data: Partial<CampaignPath>) =>
+    api<CampaignPath>(`/api/campaigns/${campaignId}/paths`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updatePath: (id: string, data: Partial<CampaignPath>) =>
+    api<CampaignPath>(`/api/paths/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deletePath: (id: string) =>
+    api<{ deleted: boolean; id: string }>(`/api/paths/${id}`, { method: 'DELETE' }),
+  createVariant: (pathId: string, data: Partial<PathVariant>) =>
+    api<PathVariant>(`/api/paths/${pathId}/variants`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateVariant: (id: string, data: Partial<PathVariant>) =>
+    api<PathVariant>(`/api/variants/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteVariant: (id: string) =>
+    api<{ deleted: boolean; id: string }>(`/api/variants/${id}`, { method: 'DELETE' }),
+  runAutoWinner: () =>
+    api<{ pathsEvaluated: number; winnersPicked: number }>(`/api/paths/auto-winner/run`, {
+      method: 'POST',
+    }),
 };

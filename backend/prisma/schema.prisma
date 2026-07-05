@@ -20,6 +20,12 @@ enum TrackingMode {
   direct
 }
 
+enum RedirectMode {
+  http_302
+  meta_refresh
+  double_meta
+}
+
 enum DomainStatus {
   pending_dns
   verified
@@ -69,20 +75,20 @@ enum PlatformConnectionStatus {
 }
 
 model TrafficSourceProfile {
-  id                    String           @id @default(uuid())
-  slug                  String           @unique
-  name                  String
-  trackingModeDefault   TrackingMode     @default(redirect) @map("tracking_mode_default")
-  clickUrlTemplate      String?          @map("click_url_template")
-  directAdUrlTemplate   String?          @map("direct_ad_url_template")
-  paramMappings         Json             @map("param_mappings")
-  conversionMethod      ConversionMethod @map("conversion_method")
-  postbackDefaults      Json?            @map("postback_defaults")
-  setupNote             String?          @map("setup_note")
-  isSystem              Boolean          @default(false) @map("is_system")
-  active                Boolean          @default(true)
-  createdAt             DateTime         @default(now()) @map("created_at")
-  updatedAt             DateTime         @updatedAt @map("updated_at")
+  id                  String           @id @default(uuid())
+  slug                String           @unique
+  name                String
+  trackingModeDefault TrackingMode     @default(redirect) @map("tracking_mode_default")
+  clickUrlTemplate    String?          @map("click_url_template")
+  directAdUrlTemplate String?          @map("direct_ad_url_template")
+  paramMappings       Json             @map("param_mappings")
+  conversionMethod    ConversionMethod @map("conversion_method")
+  postbackDefaults    Json?            @map("postback_defaults")
+  setupNote           String?          @map("setup_note")
+  isSystem            Boolean          @default(false) @map("is_system")
+  active              Boolean          @default(true)
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
 
   campaigns Campaign[]
 
@@ -110,18 +116,19 @@ model TrackingDomain {
 }
 
 model Campaign {
-  id             String        @id @default(uuid())
-  externalId     String?       @unique @map("external_id")
+  id             String          @id @default(uuid())
+  externalId     String?         @unique @map("external_id")
   name           String
-  slug           String        @unique
-  trafficSource  TrafficSource @map("traffic_source")
-  trackingMode   TrackingMode  @default(redirect) @map("tracking_mode")
-  destinationUrl String        @map("destination_url")
-  active         Boolean       @default(true)
-  domainId       String?       @map("domain_id")
+  slug           String          @unique
+  trafficSource  TrafficSource   @map("traffic_source")
+  trackingMode   TrackingMode    @default(redirect) @map("tracking_mode")
+  redirectMode   RedirectMode    @default(http_302) @map("redirect_mode")
+  destinationUrl String          @map("destination_url")
+  active         Boolean         @default(true)
+  domainId       String?         @map("domain_id")
   domain         TrackingDomain? @relation(fields: [domainId], references: [id], onDelete: SetNull)
 
-  trafficSourceProfileId String?              @map("traffic_source_profile_id")
+  trafficSourceProfileId String?               @map("traffic_source_profile_id")
   trafficSourceProfile   TrafficSourceProfile? @relation(fields: [trafficSourceProfileId], references: [id], onDelete: SetNull)
 
   workspaceName      String? @map("workspace_name")
@@ -135,19 +142,26 @@ model Campaign {
   affiliateNetwork   String? @map("affiliate_network")
   affiliateNetworkId String? @map("affiliate_network_id")
 
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
+  // Attribution controls. attributionWindowHours: reject conversions older than N
+  // hours after the click. maxConversionsPerClick: cap total conversions per click.
+  // Both null = unrestricted (backward compatible).
+  attributionWindowHours Int? @map("attribution_window_hours")
+  maxConversionsPerClick Int? @map("max_conversions_per_click")
 
-  postbackConfig PostbackConfig?
-  clicks         Click[]
-  conversions    Conversion[]
-  platformMappings CampaignPlatformMapping[]
-  spendSnapshots   CampaignSpendSnapshot[]
-  landers          Lander[]
-  target           CampaignTarget?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  postbackConfig    PostbackConfig?
+  clicks            Click[]
+  conversions       Conversion[]
+  platformMappings  CampaignPlatformMapping[]
+  spendSnapshots    CampaignSpendSnapshot[]
+  landers           Lander[]
+  target            CampaignTarget?
   blockedPlacements BlockedPlacement[]
   optimizationRules OptimizationRule[]
   controlActionLogs ControlActionLog[]
+  paths             CampaignPath[]
 
   @@map("campaigns")
 }
@@ -195,6 +209,10 @@ model PostbackConfig {
   googlePostbackUrl     String? @map("google_postback_url")
   googleEnabled         Boolean @default(false) @map("google_enabled")
 
+  // Shared secret an affiliate network must present (?secret=/?key=/?token=) on
+  // incoming S2S postbacks. When null, only the global POSTBACK_IP_ALLOWLIST gates.
+  postbackSecret String? @map("postback_secret")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -208,10 +226,10 @@ model Click {
   campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   // Network click identifiers
-  trackingId       String? @map("tracking_id")
-  externalClickId  String? @map("external_click_id")
-  gclid            String?
-  fbclid           String?
+  trackingId      String? @map("tracking_id")
+  externalClickId String? @map("external_click_id")
+  gclid           String?
+  fbclid          String?
 
   // Mediago / native ad params (from Voluum-style URLs)
   adId               String? @map("ad_id")
@@ -225,6 +243,7 @@ model Click {
 
   // Voluum funnel
   pathId             String? @map("path_id")
+  variantId          String? @map("variant_id")
   landerId           String? @map("lander_id")
   landerName         String? @map("lander_name")
   offerId            String? @map("offer_id")
@@ -275,6 +294,9 @@ model Click {
   isProxy        Boolean @default(false) @map("is_proxy")
   isHosting      Boolean @default(false) @map("is_hosting")
 
+  // Per-click paid cost captured from the traffic-source cost macro (auto-cost).
+  cost Float? @map("cost")
+
   // Bot / fraud signals
   isBot      Boolean @default(false) @map("is_bot")
   botScore   Int     @default(0) @map("bot_score")
@@ -288,8 +310,8 @@ model Click {
   visitorId    String? @map("visitor_id")
   isNewVisitor Boolean @default(true) @map("is_new_visitor")
 
-  rawParams       Json? @map("raw_params")
-  requestHeaders  Json? @map("request_headers")
+  rawParams      Json? @map("raw_params")
+  requestHeaders Json? @map("request_headers")
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -307,17 +329,20 @@ model Click {
 }
 
 model Conversion {
-  id         String           @id @default(uuid())
-  clickId    String           @map("click_id")
-  click      Click            @relation(fields: [clickId], references: [clickId], onDelete: Cascade)
-  campaignId String           @map("campaign_id")
-  campaign   Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  id         String   @id @default(uuid())
+  clickId    String   @map("click_id")
+  click      Click    @relation(fields: [clickId], references: [clickId], onDelete: Cascade)
+  campaignId String   @map("campaign_id")
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   eventType     String           @default("lead") @map("event_type")
   revenue       Float            @default(0)
   totalRevenue  Float?           @map("total_revenue")
   cost          Float            @default(0)
   currency      String?
+  // Revenue/cost normalized to the reporting base currency (see BASE_CURRENCY / FX_RATES).
+  revenueBase   Float?           @map("revenue_base")
+  costBase      Float?           @map("cost_base")
   transactionId String?          @map("transaction_id")
   status        ConversionStatus @default(pending)
   metadata      Json?
@@ -359,30 +384,30 @@ model PostbackLog {
 }
 
 model ConversionEventType {
-  id                  String   @id @default(uuid())
-  slug                String   @unique
-  displayLabel        String   @map("display_label")
-  sortOrder           Int      @default(0) @map("sort_order")
-  active              Boolean  @default(true)
-  countsAsConversion  Boolean  @default(false) @map("counts_as_conversion")
-  isSystem            Boolean  @default(false) @map("is_system")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id                 String   @id @default(uuid())
+  slug               String   @unique
+  displayLabel       String   @map("display_label")
+  sortOrder          Int      @default(0) @map("sort_order")
+  active             Boolean  @default(true)
+  countsAsConversion Boolean  @default(false) @map("counts_as_conversion")
+  isSystem           Boolean  @default(false) @map("is_system")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   @@map("conversion_event_types")
 }
 
 model PlatformConnection {
-  id           String                   @id @default(uuid())
-  platform     AdPlatform
-  label        String
-  accountId    String?                  @map("account_id")
-  credentials  Json                     @default("{}")
-  status       PlatformConnectionStatus @default(active)
-  lastSyncAt   DateTime?                @map("last_sync_at")
-  lastError    String?                  @map("last_error")
-  createdAt    DateTime                 @default(now()) @map("created_at")
-  updatedAt    DateTime                 @updatedAt @map("updated_at")
+  id          String                   @id @default(uuid())
+  platform    AdPlatform
+  label       String
+  accountId   String?                  @map("account_id")
+  credentials Json                     @default("{}")
+  status      PlatformConnectionStatus @default(active)
+  lastSyncAt  DateTime?                @map("last_sync_at")
+  lastError   String?                  @map("last_error")
+  createdAt   DateTime                 @default(now()) @map("created_at")
+  updatedAt   DateTime                 @updatedAt @map("updated_at")
 
   @@unique([platform, label])
   @@map("platform_connections")
@@ -456,15 +481,15 @@ model BlockedPlacement {
 }
 
 model CampaignTarget {
-  id           String   @id @default(uuid())
-  campaignId   String   @unique @map("campaign_id")
-  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  dailyBudget  Float?   @map("daily_budget")
-  cpaTarget    Float?   @map("cpa_target")
-  roasTarget   Float?   @map("roas_target")
-  currency     String   @default("USD")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id          String   @id @default(uuid())
+  campaignId  String   @unique @map("campaign_id")
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  dailyBudget Float?   @map("daily_budget")
+  cpaTarget   Float?   @map("cpa_target")
+  roasTarget  Float?   @map("roas_target")
+  currency    String   @default("USD")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("campaign_targets")
 }
@@ -511,42 +536,42 @@ enum AlertStatus {
 }
 
 model OptimizationRule {
-  id           String       @id @default(uuid())
-  name         String
-  scope        RuleScope
-  metric       RuleMetric
-  operator     RuleOperator
-  threshold    Float
-  windowHours  Int          @default(24) @map("window_hours")
-  action       RuleAction   @default(alert)
-  severity     AlertSeverity @default(warning)
-  enabled      Boolean      @default(true)
-  campaignId   String?      @map("campaign_id")
-  campaign     Campaign?    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  createdAt    DateTime     @default(now()) @map("created_at")
-  updatedAt    DateTime     @updatedAt @map("updated_at")
-  alerts       AlertEvent[]
+  id          String        @id @default(uuid())
+  name        String
+  scope       RuleScope
+  metric      RuleMetric
+  operator    RuleOperator
+  threshold   Float
+  windowHours Int           @default(24) @map("window_hours")
+  action      RuleAction    @default(alert)
+  severity    AlertSeverity @default(warning)
+  enabled     Boolean       @default(true)
+  campaignId  String?       @map("campaign_id")
+  campaign    Campaign?     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  alerts      AlertEvent[]
 
   @@map("optimization_rules")
 }
 
 model AlertEvent {
-  id               String          @id @default(uuid())
-  ruleId           String?         @map("rule_id")
-  rule             OptimizationRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
-  severity         AlertSeverity
-  scope            RuleScope
-  entityKey        String          @map("entity_key")
-  entityLabel      String          @map("entity_label")
-  title            String
-  message          String
-  suggestedAction  String          @map("suggested_action")
-  metricValue      Float?          @map("metric_value")
-  status           AlertStatus     @default(open)
-  campaignId       String?         @map("campaign_id")
-  createdAt        DateTime        @default(now()) @map("created_at")
-  acknowledgedAt   DateTime?       @map("acknowledged_at")
-  resolvedAt       DateTime?       @map("resolved_at")
+  id              String            @id @default(uuid())
+  ruleId          String?           @map("rule_id")
+  rule            OptimizationRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  severity        AlertSeverity
+  scope           RuleScope
+  entityKey       String            @map("entity_key")
+  entityLabel     String            @map("entity_label")
+  title           String
+  message         String
+  suggestedAction String            @map("suggested_action")
+  metricValue     Float?            @map("metric_value")
+  status          AlertStatus       @default(open)
+  campaignId      String?           @map("campaign_id")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  acknowledgedAt  DateTime?         @map("acknowledged_at")
+  resolvedAt      DateTime?         @map("resolved_at")
 
   @@index([status, createdAt])
   @@index([entityKey, scope, status])
@@ -572,4 +597,50 @@ model ControlActionLog {
 
   @@index([campaignId, createdAt])
   @@map("control_action_logs")
+}
+
+enum PathVariantKind {
+  offer
+  lander
+}
+
+/// A weighted, optionally rule-targeted route for a campaign's traffic.
+/// Empty `conditions` = default/fallback path. When a campaign has no paths,
+/// the click redirect falls back to campaign.destinationUrl (legacy behavior).
+model CampaignPath {
+  id             String        @id @default(uuid())
+  campaignId     String        @map("campaign_id")
+  campaign       Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name           String        @default("Path")
+  weight         Int           @default(100)
+  active         Boolean       @default(true)
+  // JSON array of { dimension, operator, values[] } targeting rules.
+  conditions     Json          @default("[]")
+  // Fallback destination when the path has no active variants.
+  destinationUrl String?       @map("destination_url")
+  variants       PathVariant[]
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  @@index([campaignId, active])
+  @@map("campaign_paths")
+}
+
+/// A weighted offer/lander variant within a path. Rotation picks one by weight;
+/// the auto-winner job can deactivate losers once a variant clearly wins.
+model PathVariant {
+  id             String          @id @default(uuid())
+  pathId         String          @map("path_id")
+  path           CampaignPath    @relation(fields: [pathId], references: [id], onDelete: Cascade)
+  label          String          @default("Variant")
+  kind           PathVariantKind @default(offer)
+  destinationUrl String          @map("destination_url")
+  weight         Int             @default(100)
+  active         Boolean         @default(true)
+  isWinner       Boolean         @default(false) @map("is_winner")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  @@index([pathId, active])
+  @@map("path_variants")
 }

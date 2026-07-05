@@ -4,9 +4,8 @@ Self-contained Voluum/Keitaro-style tracker for native traffic (Mediago, Faceboo
 
 ## Structure
 
-- `backend/` — NestJS API (click redirect, conversions, S2S postbacks, tracker script)
+- `backend/` — NestJS API (click redirect, conversions, S2S postbacks, tracker script). Shared tracking utilities live in `backend/src/shared/tracking/`.
 - `admin/` — Next.js admin dashboard
-- `shared/` — Shared tracking utilities
 
 ## Quick start
 
