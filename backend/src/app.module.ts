@@ -29,10 +29,16 @@ import { SettingsModule } from './settings/settings.module';
     // Global module: provides ThrottlerGuard deps app-wide. Applied per-route
     // via @UseGuards(ThrottlerGuard) on public browser endpoints only — NOT as
     // an APP_GUARD, since all admin traffic shares the Next server's single IP
-    // and would trip a global per-IP limit. 30 req/min/IP (real visitor IP via
-    // `trust proxy`). Note: in-memory storage is per-process; use a shared
-    // store (e.g. Redis) if running multiple backend instances.
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }]),
+    // and would trip a global per-IP limit. Keyed by the real visitor IP (via
+    // `trust proxy`) and per-route, so /t/visit and /conversions/track get
+    // separate buckets. Default 120 req/min/IP is deliberately generous:
+    // mobile carrier CGNAT puts many real users behind one IP, and a full quiz
+    // fires several /conversions/track calls — tune via PUBLIC_RATE_LIMIT.
+    // Note: in-memory storage is per-process; use a shared store (e.g. Redis)
+    // if running multiple backend instances.
+    ThrottlerModule.forRoot([
+      { ttl: 60000, limit: Number(process.env.PUBLIC_RATE_LIMIT) || 120 },
+    ]),
     PrismaModule,
     SettingsModule,
     ClicksModule,

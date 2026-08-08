@@ -59,12 +59,13 @@ export class TrackerScriptService {
   }
 
   function currentScript() {
-    // Must survive defer/async: document.currentScript is null for async, and
-    // "last script in DOM" is wrong once execution is deferred. Target the tag
-    // by its src, falling back to currentScript, then to the legacy heuristic.
+    // Must survive defer/async. document.currentScript points at the exact
+    // executing tag for classic + defer scripts (so it stays correct even with
+    // two tracker snippets on one page); it is null only for async, where we
+    // fall back to a src match, then to the legacy "last script" heuristic.
     return (
-      d.querySelector('script[src*="/t/tracker.js"]') ||
       d.currentScript ||
+      d.querySelector('script[src*="/t/tracker.js"]') ||
       (function () {
         var scripts = d.getElementsByTagName("script");
         return scripts[scripts.length - 1];
