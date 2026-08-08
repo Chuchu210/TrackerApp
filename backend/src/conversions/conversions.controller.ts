@@ -5,6 +5,7 @@ import { ConversionsService } from './conversions.service';
 import { VoluumExportService } from './voluum-export.service';
 import { CreateConversionDto } from './dto/create-conversion.dto';
 import { extractPostbackParamsFromQuery } from './dto/conversion-context';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 
 @Controller()
@@ -17,14 +18,17 @@ export class ConversionsController {
   @Post('conversions')
   @UseGuards(ApiKeyGuard)
   create(@Body() dto: CreateConversionDto, @Req() req: Request) {
-    return this.conversionsService.create(dto, this.buildContext(req));
+    return this.conversionsService.create(dto, { ...this.buildContext(req), trusted: true });
   }
 
   /** Public endpoint for client-side tracker script (tkCallback.registerConversion) */
   @Post('conversions/track')
+  @UseGuards(ThrottlerGuard)
   @Header('Access-Control-Allow-Origin', '*')
   trackFromClient(@Body() dto: CreateConversionDto, @Req() req: Request) {
-    return this.conversionsService.create(dto, this.buildContext(req));
+    // Untrusted: client-supplied revenue is ignored downstream, and the
+    // response is trimmed since the tracker never reads it.
+    return this.conversionsService.create(dto, { ...this.buildContext(req), trusted: false });
   }
 
   /** Voluum-style incoming postback: /postback?cid=...&et=Lead&payout=20&txid=... */

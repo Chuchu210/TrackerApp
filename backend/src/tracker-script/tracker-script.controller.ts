@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Header, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, Header, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { TrackerScriptService } from './tracker-script.service';
 import { DirectVisitDto } from './dto/direct-visit.dto';
@@ -27,6 +28,7 @@ export class TrackerScriptController {
 
   /** Direct LP tracking — Facebook/Google land directly on LP, script registers the visit */
   @Post('visit')
+  @UseGuards(ThrottlerGuard)
   @Header('Access-Control-Allow-Origin', '*')
   async registerVisit(
     @Body() dto: DirectVisitDto,
