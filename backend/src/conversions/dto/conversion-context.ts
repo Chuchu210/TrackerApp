@@ -1,4 +1,12 @@
 export interface ConversionContext {
+  /**
+   * Whether the caller is allowed to set monetary fields (revenue/cost).
+   * Server-to-server postbacks and the API-key endpoint are trusted; the
+   * public browser endpoint (/conversions/track) is not, so client-supplied
+   * revenue is ignored to prevent conversion/revenue injection.
+   * Defaults to trusted when unset (server-initiated calls).
+   */
+  trusted?: boolean;
   incomingPostbackIp?: string;
   incomingPostbackUrl?: string;
   postbackParam1?: string;

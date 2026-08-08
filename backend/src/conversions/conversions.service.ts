@@ -112,7 +112,13 @@ export class ConversionsService {
       where: { clickId_eventType: { clickId: click.clickId, eventType } },
     });
 
+    // Untrusted (public browser) callers never read the response body — the
+    // tracker fetch only .catch()es — so skip the join-heavy re-fetch on the
+    // hot path (fires on every quiz click_button).
+    const trusted = context?.trusted !== false;
+
     if (existing) {
+      if (!trusted) return { conversion: { id: existing.id }, duplicate: true };
       const full = await this.getConversionWithClick(existing.id);
       return { conversion: full, duplicate: true };
     }
@@ -129,8 +135,10 @@ export class ConversionsService {
 
     const settings = await this.settings.getEffective();
     const fx = buildFxConfig(settings.baseCurrency, settings.fxRates);
-    const revenue = dto.revenue || 0;
-    const cost = dto.cost || 0;
+    // Ignore client-supplied money on untrusted (public) calls.
+    const revenue = trusted ? dto.revenue || 0 : 0;
+    const cost = trusted ? dto.cost || 0 : 0;
+    const totalRevenue = trusted ? (dto.totalRevenue ?? dto.revenue ?? 0) : 0;
 
     const conversion = await this.prisma.conversion.create({
       data: {
@@ -138,7 +146,7 @@ export class ConversionsService {
         campaignId: click.campaignId,
         eventType,
         revenue,
-        totalRevenue: dto.totalRevenue ?? dto.revenue ?? 0,
+        totalRevenue,
         cost,
         currency: dto.currency || null,
         revenueBase: normalizeToBase(revenue, dto.currency, fx),
@@ -159,6 +167,8 @@ export class ConversionsService {
     setImmediate(() => {
       this.postbacks.processConversion(conversion.id).catch(() => {});
     });
+
+    if (!trusted) return { conversion: { id: conversion.id }, duplicate: false };
 
     const full = await this.getConversionWithClick(conversion.id);
     return { conversion: full, duplicate: false };

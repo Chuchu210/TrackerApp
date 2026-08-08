@@ -1,0 +1,39 @@
+name: Deploy to VPS
+
+# Deploys the tracker (backend + admin) to the production VPS on every push to
+# main, and on manual dispatch. Pull-based: the runner SSHes in and the VPS
+# updates itself (git reset --hard origin/main) then runs deploy/ci-deploy.sh,
+# which rebuilds only what changed.
+#
+# Required repository secret (Settings -> Secrets and variables -> Actions):
+#   VPS_SSH_KEY  - a private SSH key whose public half is in the VPS's
+#                  /root/.ssh/authorized_keys.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-tracker
+  cancel-in-progress: false
+
+env:
+  VPS_HOST: 76.13.114.85
+  VPS_USER: root
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy over SSH
+        run: |
+          ssh -i ~/.ssh/id_deploy "$VPS_USER@$VPS_HOST" \
+            'set -e; cd /var/www/TrackerApp; B=$(git rev-parse HEAD); git fetch origin main; git reset --hard origin/main; C=$(git diff --name-only "$B" HEAD); echo "changed files:"; echo "$C"; DEPLOY_CHANGED="$C" bash deploy/ci-deploy.sh'
