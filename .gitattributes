@@ -1,0 +1,5 @@
+# Shell scripts and CI workflows must stay LF so they run on the Linux VPS
+# (a CRLF shebang breaks bash: "bash\r: command not found").
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
