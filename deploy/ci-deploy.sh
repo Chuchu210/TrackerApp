@@ -34,9 +34,25 @@ else
 fi
 
 pm2 save
-if curl -sf http://127.0.0.1:3001/health >/dev/null; then
+
+# PM2 returns as soon as the process is spawned, not once Nest has finished
+# bootstrapping (module resolution, Prisma connect, app.listen) — so a curl
+# right after `pm2 restart` can race a cold start and hit connection-refused.
+# Retry for up to ~20s before failing the deploy.
+echo "== waiting for api health =="
+ok=0
+for i in $(seq 1 10); do
+  if curl -sf http://127.0.0.1:3001/health >/dev/null; then
+    ok=1
+    break
+  fi
+  sleep 2
+done
+
+if [ "$ok" = "1" ]; then
   echo "== api health OK =="
 else
-  echo "== api health FAIL ==" >&2
+  echo "== api health FAIL (after ~20s) ==" >&2
+  pm2 logs tracker-api --lines 40 --nostream || true
   exit 1
 fi
