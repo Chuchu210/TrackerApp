@@ -344,6 +344,9 @@ model Click {
 
   @@index([campaignId, createdAt])
   @@index([campaignId, visitorId])
+  // Serves the per-IP click-velocity count in ClicksService.evaluateVelocity
+  // (fraud detection), which runs on every non-private click.
+  @@index([ipAddress, createdAt])
   @@index([trackingId])
   @@index([publisherName])
   @@index([platform])
