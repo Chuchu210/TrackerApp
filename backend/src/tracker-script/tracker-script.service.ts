@@ -59,8 +59,17 @@ export class TrackerScriptService {
   }
 
   function currentScript() {
-    var scripts = d.getElementsByTagName("script");
-    return scripts[scripts.length - 1];
+    // Must survive defer/async: document.currentScript is null for async, and
+    // "last script in DOM" is wrong once execution is deferred. Target the tag
+    // by its src, falling back to currentScript, then to the legacy heuristic.
+    return (
+      d.querySelector('script[src*="/t/tracker.js"]') ||
+      d.currentScript ||
+      (function () {
+        var scripts = d.getElementsByTagName("script");
+        return scripts[scripts.length - 1];
+      })()
+    );
   }
 
   function isNoViewContent(tag) {
@@ -196,7 +205,7 @@ export class TrackerScriptService {
   ): string {
     const baseUrl =
       trackerBase || this.config.get<string>('TRACKER_BASE_URL') || 'http://localhost:3001';
-    let tag = `<script src="${baseUrl}/t/tracker.js" data-campaign="${campaignRef}" data-mode="${mode}"`;
+    let tag = `<script defer src="${baseUrl}/t/tracker.js" data-campaign="${campaignRef}" data-mode="${mode}"`;
     if (options?.noViewContent) {
       tag += ' data-no-viewcontent="true"';
     }
