@@ -31,9 +31,9 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
-          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: Deploy over SSH
         run: |
-          ssh -i ~/.ssh/id_deploy "$VPS_USER@$VPS_HOST" \
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+            -i ~/.ssh/id_deploy "$VPS_USER@$VPS_HOST" \
             'set -e; cd /var/www/TrackerApp; B=$(git rev-parse HEAD); git fetch origin main; git reset --hard origin/main; C=$(git diff --name-only "$B" HEAD); echo "changed files:"; echo "$C"; DEPLOY_CHANGED="$C" bash deploy/ci-deploy.sh'
