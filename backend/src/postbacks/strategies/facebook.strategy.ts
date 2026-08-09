@@ -9,6 +9,7 @@ import {
 } from '../interfaces/postback-strategy.interface';
 import { httpRequestWithRetry } from '../helpers/facebook-graph-http.helper';
 import { sha256 } from '../helpers/hash.helper';
+import { metaEventNameForEventType } from '../../shared/tracking/meta-events';
 
 @Injectable()
 export class FacebookStrategy implements PostbackStrategy {
@@ -55,7 +56,7 @@ export class FacebookStrategy implements PostbackStrategy {
 
     const eventId = `${conversion.id}-${click.clickId}`;
     const eventData = {
-      event_name: 'Lead',
+      event_name: metaEventNameForEventType(conversion.eventType),
       event_time: Math.floor(Date.now() / 1000),
       event_id: eventId,
       action_source: 'website',
