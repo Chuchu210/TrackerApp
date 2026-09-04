@@ -25,16 +25,20 @@ export class PlatformSyncService {
   private readonly logger = new Logger(PlatformSyncService.name);
   private adapters = new Map<AdPlatform, PlatformSyncAdapter>();
   private readonly mediagoAdapter: MediagoSyncAdapter;
+  private readonly openAiAdapter: OpenAiSyncAdapter;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly http: HttpService,
   ) {
     this.mediagoAdapter = new MediagoSyncAdapter(this.http);
+    this.openAiAdapter = new OpenAiSyncAdapter(this.http);
     this.registerAdapters();
   }
 
-  @Cron('0 * * * *')
+  // Every 15 minutes rather than hourly: the dashboard reads spend from the
+  // snapshots this writes, so the sync interval is the real data freshness.
+  @Cron('*/15 * * * *')
   async scheduledSync() {
     await this.syncAll().catch((err) => this.logger.error('Scheduled sync failed', err));
   }
@@ -102,7 +106,7 @@ export class PlatformSyncService {
       new TaboolaSyncAdapter(this.http),
       new MgidSyncAdapter(this.http),
       new BingSyncAdapter(),
-      new OpenAiSyncAdapter(this.http),
+      this.openAiAdapter,
       new ManualSyncAdapter(AdPlatform.powerspace),
       new ManualSyncAdapter(AdPlatform.organic),
       new ManualSyncAdapter(AdPlatform.native),
@@ -229,6 +233,62 @@ export class PlatformSyncService {
       await this.createMapping({
         campaignId: match.id,
         platform: AdPlatform.mediago,
+        externalCampaignId: ext.campaignId,
+      });
+      mapped += 1;
+    }
+
+    return { mapped, total: external.length, alreadyMapped, unmatched };
+  }
+
+  /**
+   * Match OpenAI Ads campaigns onto tracker campaigns by id or name, using the
+   * same matcher as Mediago. Unmatched campaigns are simply left alone so the
+   * user can map them explicitly.
+   */
+  async autoMapOpenAiCampaigns(connectionId: string) {
+    const conn = await this.prisma.platformConnection.findUnique({
+      where: { id: connectionId },
+    });
+    if (!conn || conn.platform !== AdPlatform.openai) {
+      throw new BadRequestException('OpenAI connection not found');
+    }
+
+    const external = await this.openAiAdapter.listCampaigns(
+      conn.credentials as Record<string, unknown>,
+    );
+    const trackerCampaigns = await this.prisma.campaign.findMany({
+      select: { id: true, name: true, slug: true, externalId: true },
+    });
+
+    let mapped = 0;
+    let alreadyMapped = 0;
+    let unmatched = 0;
+    for (const ext of external) {
+      const existing = await this.prisma.campaignPlatformMapping.findFirst({
+        where: {
+          platform: AdPlatform.openai,
+          externalCampaignId: ext.campaignId,
+        },
+      });
+      if (existing) {
+        alreadyMapped += 1;
+        continue;
+      }
+
+      const match = this.matchTrackerCampaign(
+        trackerCampaigns,
+        ext.campaignId,
+        ext.campaignName,
+      );
+      if (!match) {
+        unmatched += 1;
+        continue;
+      }
+
+      await this.createMapping({
+        campaignId: match.id,
+        platform: AdPlatform.openai,
         externalCampaignId: ext.campaignId,
       });
       mapped += 1;
@@ -394,6 +454,17 @@ export class PlatformSyncService {
       const auto = await this.autoMapMediagoCampaigns(connectionId);
       if (auto.mapped > 0) {
         this.logger.log(`Mediago auto-mapped ${auto.mapped} campaign(s) for connection ${connectionId}`);
+      }
+    }
+
+    if (conn.platform === AdPlatform.openai) {
+      const auto = await this.autoMapOpenAiCampaigns(connectionId).catch((err) => {
+        // Mapping is a convenience; a failure here must not abort the sync.
+        this.logger.error('OpenAI auto-map failed', err);
+        return { mapped: 0 };
+      });
+      if (auto.mapped > 0) {
+        this.logger.log(`OpenAI auto-mapped ${auto.mapped} campaign(s) for connection ${connectionId}`);
       }
     }
 

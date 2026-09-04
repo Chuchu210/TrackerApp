@@ -175,6 +175,32 @@ export class OpenAiSyncAdapter implements PlatformSyncAdapter {
     return rows;
   }
 
+  /**
+   * Campaigns on the ad account, used to auto-map them onto tracker campaigns.
+   * Spend rows are keyed by external campaign id and are dropped when no
+   * mapping exists, so without this the sync would silently import nothing.
+   */
+  async listCampaigns(
+    credentials: Record<string, unknown>,
+  ): Promise<{ campaignId: string; campaignName: string }[]> {
+    const apiKey = this.resolveApiKey(credentials);
+    if (!apiKey) return [];
+
+    const { data } = await firstValueFrom(
+      this.http.get<{ data?: { id?: string; name?: string }[] }>(
+        `${OPENAI_ADS_API}/campaigns`,
+        { headers: { Authorization: `Bearer ${apiKey}` } },
+      ),
+    );
+
+    return (data?.data || [])
+      .filter((c) => c.id)
+      .map((c) => ({
+        campaignId: String(c.id),
+        campaignName: c.name || String(c.id),
+      }));
+  }
+
   /** Prefer the daily bucket label, fall back to the row's start timestamp. */
   private rowDate(item: InsightsRow): Date | null {
     if (item.readable_time) {
