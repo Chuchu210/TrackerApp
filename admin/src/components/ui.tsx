@@ -1,6 +1,7 @@
 import type {
   AnchorHTMLAttributes,
   ButtonHTMLAttributes,
+  CSSProperties,
   InputHTMLAttributes,
   LabelHTMLAttributes,
   ReactNode,
@@ -451,9 +452,18 @@ export function TableHead({ children, sticky = false }: { children: ReactNode; s
   );
 }
 
-export function Th({ children, className = '' }: { children?: ReactNode; className?: string }) {
+export function Th({
+  children,
+  className = '',
+  style,
+}: {
+  children?: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+}) {
   return (
     <th
+      style={style}
       className={`text-left px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 ${className}`}
     >
       {children}
@@ -464,15 +474,22 @@ export function Th({ children, className = '' }: { children?: ReactNode; classNa
 export function Td({
   children,
   className = '',
+  style,
+  title,
   onClick,
 }: {
   children: ReactNode;
   className?: string;
+  style?: CSSProperties;
+  /** Native tooltip — used to reveal values in truncated cells. */
+  title?: string;
   onClick?: () => void;
 }) {
   const interactive = Boolean(onClick);
   return (
     <td
+      style={style}
+      title={title}
       className={`px-5 py-3.5 text-sm text-zinc-700 dark:text-zinc-300 ${interactive ? 'cursor-pointer' : ''} ${className}`}
       onClick={onClick}
       onKeyDown={

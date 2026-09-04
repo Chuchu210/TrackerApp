@@ -914,6 +914,44 @@ export const trackerApi = {
     }>(`/api/analytics/campaigns${qs}`);
     return normalizeCampaignReport(report);
   },
+  getOfferReport: async (params?: Record<string, string>) => {
+    const qs = params ? `?${new URLSearchParams(params)}` : '';
+    const { normalizeCampaignReport } = await import('./normalize-campaign-report');
+    const report = await api<{
+      rows: Array<Partial<CampaignReportRow> & Record<string, unknown>>;
+      eventColumns: Array<Record<string, unknown>>;
+      campaign: { id: string; name: string } | null;
+    }>(`/api/analytics/offers${qs}`);
+    return {
+      ...normalizeCampaignReport(report),
+      campaign: report.campaign ?? null,
+    };
+  },
+  getCampaignDrilldownReport: async (params?: Record<string, string>) => {
+    const qs = params ? `?${new URLSearchParams(params)}` : '';
+    const { normalizeCampaignReport } = await import('./normalize-campaign-report');
+    const report = await api<{
+      rows: Array<Partial<CampaignReportRow> & Record<string, unknown>>;
+      eventColumns: Array<Record<string, unknown>>;
+      campaign: { id: string; name: string } | null;
+      dimension: string;
+    }>(`/api/analytics/drilldown${qs}`);
+    return {
+      ...normalizeCampaignReport(report),
+      campaign: report.campaign ?? null,
+      dimension: report.dimension,
+    };
+  },
+  exportOfferReportCsv: async (params?: Record<string, string>) => {
+    const qs = params ? `?${new URLSearchParams(params)}` : '';
+    const res = await adminRaw(`analytics/offers/export/csv${qs}`);
+    return res.text();
+  },
+  exportCampaignDrilldownCsv: async (params?: Record<string, string>) => {
+    const qs = params ? `?${new URLSearchParams(params)}` : '';
+    const res = await adminRaw(`analytics/drilldown/export/csv${qs}`);
+    return res.text();
+  },
   getTimeseries: (params?: Record<string, string>) => {
     const qs = params ? `?${new URLSearchParams(params)}` : '';
     return api<TimeseriesPoint[]>(`/api/analytics/timeseries${qs}`);

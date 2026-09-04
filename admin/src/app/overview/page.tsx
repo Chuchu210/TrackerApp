@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Alert,
   Button,
@@ -9,6 +9,7 @@ import {
   PageHeader,
   StatCard,
   sectionHeadingClass,
+  mutedTextClass,
   type StatCardTone,
 } from '@/components/ui';
 import { DateRangePicker, buildPresets, type DateRange } from '@/components/DateRangePicker';
@@ -16,6 +17,8 @@ import { ExcludeBotsToggle } from '@/components/ExcludeBotsToggle';
 import { OverviewChart } from '@/components/OverviewChart';
 import { CampaignReportTable } from '@/components/CampaignReportTable';
 import { OverviewColumnPicker } from '@/components/OverviewColumnPicker';
+import { ReportDimensionTabs } from '@/components/ReportDimensionTabs';
+import { VoluumReportToolbar } from '@/components/VoluumReportToolbar';
 import { trackerApi, formatApiError, type CampaignReportRow, type DigestReport, type EventColumnDef, type TimeseriesPoint, type VisitStats } from '@/lib/api';
 import {
   buildOverviewColumns,
@@ -23,6 +26,12 @@ import {
   saveVisibleColumns,
   type OverviewColumnId,
 } from '@/lib/overview-columns';
+import {
+  getReportDimension,
+  isDrilldownLevel,
+  type ReportDimensionId,
+  type ReportLevel,
+} from '@/lib/report-dimensions';
 
 function KpiIcon({ d }: { d: string }) {
   return (
@@ -47,84 +56,112 @@ const KPI_CARDS: {
   { key: 'profit', label: 'Profit', tone: 'amber', icon: <KpiIcon d="M12 3v18M3 12h18" /> },
 ];
 
+
+type SelectedCampaign = { id: string; name: string };
+
 export default function OverviewPage() {
   const [range, setRange] = useState<DateRange>(buildPresets()[2]);
   const [excludeBots, setExcludeBots] = useState(false);
   const [overview, setOverview] = useState<VisitStats | null>(null);
   const [digest, setDigest] = useState<DigestReport | null>(null);
-  const [rows, setRows] = useState<CampaignReportRow[]>([]);
-  const [eventColumns, setEventColumns] = useState<EventColumnDef[]>([]);
+  const [campaignRows, setCampaignRows] = useState<CampaignReportRow[]>([]);
+  const [campaignEventColumns, setCampaignEventColumns] = useState<EventColumnDef[]>([]);
+  const [drilldownRows, setDrilldownRows] = useState<CampaignReportRow[]>([]);
+  const [drilldownEventColumns, setDrilldownEventColumns] = useState<EventColumnDef[]>([]);
   const [timeseries, setTimeseries] = useState<TimeseriesPoint[]>([]);
   const [loading, setLoading] = useState(true);
+  const [drilldownLoading, setDrilldownLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeMetrics, setActiveMetrics] = useState(
     () => new Set(['visits', 'conversions', 'revenue', 'cost']),
   );
   const [visibleColumns, setVisibleColumns] = useState<Set<OverviewColumnId>>(() => new Set());
+  const [reportLevel, setReportLevel] = useState<ReportLevel>('campaigns');
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  const [selectedCampaign, setSelectedCampaign] = useState<SelectedCampaign | null>(null);
+  const skipSelectionKpiFetch = useRef(true);
 
-  const params = {
+  const rangeParams = {
     from: range.from,
     to: range.to,
     ...(excludeBots ? { excludeBots: 'true' } : {}),
   };
 
+  const applyColumnIds = (eventColumns: EventColumnDef[]) => {
+    const allIds = buildOverviewColumns(eventColumns).map((c) => c.id);
+    setVisibleColumns((prev) => {
+      if (prev.size > 0) {
+        const kept = new Set([...prev].filter((id) => allIds.includes(id)));
+        if (kept.size > 0) return kept;
+      }
+      return loadVisibleColumns(allIds);
+    });
+  };
+
   const load = useCallback(() => {
     setLoading(true);
+    const overviewParams = {
+      ...rangeParams,
+      ...(selectedCampaign ? { campaignId: selectedCampaign.id } : {}),
+    };
     Promise.all([
-      trackerApi.getAnalyticsOverview(params),
-      trackerApi.getCampaignReport(params),
-      trackerApi.getTimeseries({ ...params, granularity: 'hour' }),
-      trackerApi.getDigest({ ...params, eventType: 'call_click' }),
+      trackerApi.getAnalyticsOverview(overviewParams),
+      trackerApi.getCampaignReport(rangeParams),
+      trackerApi.getTimeseries({ ...rangeParams, granularity: 'hour' }),
+      trackerApi.getDigest({ ...rangeParams, eventType: 'call_click' }),
+      selectedCampaign && isDrilldownLevel(reportLevel)
+        ? trackerApi.getCampaignDrilldownReport({
+            ...rangeParams,
+            campaignId: selectedCampaign.id,
+            dimension: reportLevel,
+          })
+        : Promise.resolve(null),
     ])
-      .then(([ov, report, ts, dig]) => {
+      .then(([ov, report, ts, dig, drilldown]) => {
         setOverview(ov);
-        setRows(report.rows);
-        setEventColumns(report.eventColumns);
+        setCampaignRows(report.rows);
+        setCampaignEventColumns(report.eventColumns);
         setTimeseries(ts);
         setDigest(dig);
+        if (drilldown) {
+          setDrilldownRows(drilldown.rows);
+          setDrilldownEventColumns(drilldown.eventColumns);
+          applyColumnIds(drilldown.eventColumns);
+        } else {
+          applyColumnIds(report.eventColumns);
+        }
         setError(null);
-        const allIds = buildOverviewColumns(report.eventColumns).map((c) => c.id);
-        setVisibleColumns((prev) => {
-          if (prev.size > 0) {
-            const kept = new Set([...prev].filter((id) => allIds.includes(id)));
-            if (kept.size > 0) return kept;
-          }
-          return loadVisibleColumns(allIds);
-        });
       })
       .catch((err) => {
         console.error(err);
         setError(formatApiError(err));
       })
       .finally(() => setLoading(false));
-  }, [range.from, range.to, excludeBots]);
+  }, [range.from, range.to, excludeBots, selectedCampaign?.id, reportLevel]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    const overviewParams = {
+      ...rangeParams,
+      ...(selectedCampaign ? { campaignId: selectedCampaign.id } : {}),
+    };
 
     Promise.all([
-      trackerApi.getAnalyticsOverview(params),
-      trackerApi.getCampaignReport(params),
-      trackerApi.getTimeseries({ ...params, granularity: 'hour' }),
-      trackerApi.getDigest({ ...params, eventType: 'call_click' }),
+      trackerApi.getAnalyticsOverview(overviewParams),
+      trackerApi.getCampaignReport(rangeParams),
+      trackerApi.getTimeseries({ ...rangeParams, granularity: 'hour' }),
+      trackerApi.getDigest({ ...rangeParams, eventType: 'call_click' }),
     ])
       .then(([ov, report, ts, dig]) => {
         if (cancelled) return;
         setOverview(ov);
-        setRows(report.rows);
-        setEventColumns(report.eventColumns);
+        setCampaignRows(report.rows);
+        setCampaignEventColumns(report.eventColumns);
         setTimeseries(ts);
         setDigest(dig);
         setError(null);
-        const allIds = buildOverviewColumns(report.eventColumns).map((c) => c.id);
-        setVisibleColumns((prev) => {
-          if (prev.size > 0) {
-            const kept = new Set([...prev].filter((id) => allIds.includes(id)));
-            if (kept.size > 0) return kept;
-          }
-          return loadVisibleColumns(allIds);
-        });
+        if (reportLevel === 'campaigns') applyColumnIds(report.eventColumns);
       })
       .catch((err) => {
         console.error(err);
@@ -136,6 +173,55 @@ export default function OverviewPage() {
 
     return () => { cancelled = true; };
   }, [range.from, range.to, excludeBots]);
+
+  useEffect(() => {
+    if (skipSelectionKpiFetch.current) {
+      skipSelectionKpiFetch.current = false;
+      return;
+    }
+    let cancelled = false;
+    trackerApi
+      .getAnalyticsOverview({
+        ...rangeParams,
+        ...(selectedCampaign ? { campaignId: selectedCampaign.id } : {}),
+      })
+      .then((ov) => {
+        if (!cancelled) setOverview(ov);
+      })
+      .catch((err) => {
+        console.error(err);
+        if (!cancelled) setError(formatApiError(err));
+      });
+    return () => { cancelled = true; };
+  }, [selectedCampaign?.id]);
+
+  useEffect(() => {
+    if (!isDrilldownLevel(reportLevel) || !selectedCampaign) return;
+    let cancelled = false;
+    setDrilldownLoading(true);
+    trackerApi
+      .getCampaignDrilldownReport({
+        ...rangeParams,
+        campaignId: selectedCampaign.id,
+        dimension: reportLevel,
+      })
+      .then((report) => {
+        if (cancelled) return;
+        setDrilldownRows(report.rows);
+        setDrilldownEventColumns(report.eventColumns);
+        applyColumnIds(report.eventColumns);
+        if (report.campaign) setSelectedCampaign(report.campaign);
+        setError(null);
+      })
+      .catch((err) => {
+        console.error(err);
+        if (!cancelled) setError(formatApiError(err));
+      })
+      .finally(() => {
+        if (!cancelled) setDrilldownLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [reportLevel, selectedCampaign?.id, range.from, range.to, excludeBots]);
 
   const toggleMetric = (key: string) => {
     setActiveMetrics((prev) => {
@@ -151,8 +237,80 @@ export default function OverviewPage() {
     saveVisibleColumns(next);
   };
 
+  const clearSelection = useCallback(() => {
+    setSelectedRowId(null);
+    setSelectedCampaign(null);
+    setReportLevel('campaigns');
+    applyColumnIds(campaignEventColumns);
+  }, [campaignEventColumns]);
+
+  const handleSelectRow = (row: CampaignReportRow | null) => {
+    if (!row) {
+      setSelectedRowId(null);
+      return;
+    }
+    setSelectedRowId((prev) => (prev === row.campaignId ? null : row.campaignId));
+  };
+
+  const openReport = () => {
+    const row =
+      campaignRows.find((r) => r.campaignId === selectedRowId) ??
+      (selectedCampaign ? { campaignId: selectedCampaign.id, campaignName: selectedCampaign.name } : null);
+    if (!row) return;
+    setSelectedCampaign({ id: row.campaignId, name: row.campaignName });
+    setReportLevel('offers');
+  };
+
+  const openDimension = (dimension: ReportDimensionId) => {
+    if (!selectedCampaign) {
+      openReport();
+      return;
+    }
+    setReportLevel(dimension);
+  };
+
+  const refreshReport = () => {
+    if (!selectedCampaign || !isDrilldownLevel(reportLevel)) {
+      load();
+      return;
+    }
+    setDrilldownLoading(true);
+    trackerApi
+      .getCampaignDrilldownReport({
+        ...rangeParams,
+        campaignId: selectedCampaign.id,
+        dimension: reportLevel,
+      })
+      .then((report) => {
+        setDrilldownRows(report.rows);
+        setDrilldownEventColumns(report.eventColumns);
+        applyColumnIds(report.eventColumns);
+        setError(null);
+      })
+      .catch((err) => {
+        console.error(err);
+        setError(formatApiError(err));
+      })
+      .finally(() => setDrilldownLoading(false));
+  };
+
   const exportCsv = async () => {
-    const csv = await trackerApi.exportCampaignReportCsv(params);
+    if (isDrilldownLevel(reportLevel) && selectedCampaign) {
+      const csv = await trackerApi.exportCampaignDrilldownCsv({
+        ...rangeParams,
+        campaignId: selectedCampaign.id,
+        dimension: reportLevel,
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${reportLevel}-report.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
+    const csv = await trackerApi.exportCampaignReportCsv(rangeParams);
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -163,14 +321,30 @@ export default function OverviewPage() {
   };
 
   const kpiValue = (key: string) => {
-    if (!overview) return '—';
+    if (!overview) return 'â€”';
     const v = (overview as unknown as Record<string, unknown>)[key];
     if (v === undefined || v === null) return '0';
     if (key === 'revenue' || key === 'cost' || key === 'profit') {
-      return `€${Number(v).toFixed(2)}`;
+      return `â‚¬${Number(v).toFixed(2)}`;
     }
     return String(v);
   };
+
+  const onDrilldown = isDrilldownLevel(reportLevel);
+  const activeDimension = onDrilldown ? getReportDimension(reportLevel) : null;
+  const displayRows = onDrilldown ? drilldownRows : campaignRows;
+  const displayEventColumns = onDrilldown ? drilldownEventColumns : campaignEventColumns;
+  const nameColumnLabel = activeDimension?.nameColumnLabel || 'Campaign name';
+  const activeFilterDimension: ReportDimensionId = onDrilldown ? reportLevel : 'offers';
+
+  useEffect(() => {
+    if (!onDrilldown) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') clearSelection();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onDrilldown, clearSelection]);
 
   if (loading && !overview) return <Loading label="Loading overview..." />;
 
@@ -191,7 +365,7 @@ export default function OverviewPage() {
         }
       />
 
-      <div className="mb-6 flex flex-wrap gap-3 items-center">
+      <div className="mb-6 flex flex-wrap items-center gap-3">
         <DateRangePicker value={range} onChange={setRange} />
         <ExcludeBotsToggle value={excludeBots} onChange={setExcludeBots} />
       </div>
@@ -202,33 +376,32 @@ export default function OverviewPage() {
         </div>
       )}
 
-      {digest && digest.items.length > 0 && (
-        <Card elevated className="mb-8 border-indigo-200/60 dark:border-indigo-800/60 bg-indigo-50/30 dark:bg-indigo-950/20">
-          <h2 className={`${sectionHeadingClass} mb-4`}>Today&apos;s decisions</h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {digest.items.slice(0, 6).map((item) => (
-              <div
-                key={item.id}
-                className="rounded-xl bg-white/80 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800 p-4 shadow-sm"
-              >
-                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{item.title}</p>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1 leading-relaxed">{item.message}</p>
-                <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-2 font-medium">→ {item.action}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
+      {!onDrilldown ? (
+        <>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-8">
+          {digest && digest.items.length > 0 && (
+            <Card elevated className="mb-8 border-indigo-200/60 dark:border-indigo-800/60 bg-indigo-50/30 dark:bg-indigo-950/20">
+              <h2 className={`${sectionHeadingClass} mb-4`}>Today&apos;s decisions</h2>
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                {digest.items.slice(0, 6).map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-xl border border-zinc-200/60 bg-white/80 p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60"
+                  >
+                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{item.title}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">{item.message}</p>
+                    <p className="mt-2 text-xs font-medium text-indigo-600 dark:text-indigo-400">â†’ {item.action}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+        </>
+      ) : null}
+
+      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
         {KPI_CARDS.map((c) => (
-          <StatCard
-            key={c.key}
-            label={c.label}
-            value={kpiValue(c.key)}
-            tone={c.tone}
-            icon={c.icon}
-          />
+          <StatCard key={c.key} label={c.label} value={kpiValue(c.key)} tone={c.tone} icon={c.icon} />
         ))}
       </div>
 
@@ -237,15 +410,66 @@ export default function OverviewPage() {
         <OverviewChart data={timeseries} active={activeMetrics} onToggle={toggleMetric} />
       </Card>
 
-      <div className="flex items-center justify-between mb-4">
-        <h2 className={sectionHeadingClass}>Campaign performance</h2>
-        <OverviewColumnPicker
-          eventColumns={eventColumns}
-          visible={visibleColumns}
-          onChange={handleColumnsChange}
-        />
+      <div className="mb-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className={sectionHeadingClass}>
+              {onDrilldown
+                ? `${activeDimension?.label || 'Offers'} performance`
+                : 'Campaign performance'}
+            </h2>
+            {!onDrilldown ? (
+              <p className={`mt-1 text-xs ${mutedTextClass}`}>
+                Select a campaign, then click Report to drill down.
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border border-zinc-200/70 shadow-[var(--shadow-sm)] dark:border-zinc-800/80">
+          <VoluumReportToolbar
+            reportLevel={reportLevel}
+            selectedCampaign={selectedCampaign}
+            selectedRowId={selectedRowId}
+            onOpenReport={openReport}
+            onBackToCampaigns={clearSelection}
+            onSelectDimension={openDimension}
+            onExport={exportCsv}
+            onRefresh={refreshReport}
+            columnsSlot={
+              <OverviewColumnPicker
+                eventColumns={displayEventColumns}
+                visible={visibleColumns}
+                onChange={handleColumnsChange}
+                nameColumnLabel={nameColumnLabel}
+              />
+            }
+          />
+
+          {onDrilldown ? (
+            <ReportDimensionTabs
+              active={activeFilterDimension}
+              onSelect={openDimension}
+              disabled={drilldownLoading}
+            />
+          ) : null}
+
+          {drilldownLoading && onDrilldown ? (
+            <Loading label={`Loading ${activeDimension?.label || 'report'}...`} />
+          ) : (
+            <CampaignReportTable
+              rows={displayRows}
+              eventColumns={displayEventColumns}
+              visibleColumns={visibleColumns}
+              nameColumnLabel={nameColumnLabel}
+              showCampaignMeta={!onDrilldown}
+              selectable={!onDrilldown}
+              selectedId={onDrilldown ? null : selectedRowId}
+              onSelect={handleSelectRow}
+            />
+          )}
+        </div>
       </div>
-      <CampaignReportTable rows={rows} eventColumns={eventColumns} visibleColumns={visibleColumns} />
     </div>
   );
 }
