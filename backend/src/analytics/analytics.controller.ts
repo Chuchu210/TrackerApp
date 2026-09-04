@@ -25,6 +25,99 @@ export class AnalyticsController {
     private readonly incomingPostbacks: IncomingPostbacksService,
   ) {}
 
+  /** Voluum-style drilldown of one campaign along a single dimension. */
+  @Get('drilldown')
+  reportDrilldown(
+    @Query('campaignId') campaignId?: string,
+    @Query('dimension') dimension?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('excludeBots') excludeBots?: string,
+  ) {
+    if (!campaignId || !dimension) {
+      return {
+        rows: [],
+        eventColumns: [],
+        campaign: null,
+        dimension: dimension || 'offers',
+      };
+    }
+    return this.campaignReport.getCampaignDrilldownReport(
+      campaignId,
+      dimension as never,
+      from,
+      to,
+      excludeBots === 'true',
+    );
+  }
+
+  /** Offer breakdown for one campaign (the 'offers' drilldown, named). */
+  @Get('offers')
+  reportOffers(
+    @Query('campaignId') campaignId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('excludeBots') excludeBots?: string,
+  ) {
+    if (!campaignId) {
+      return { rows: [], eventColumns: [], campaign: null };
+    }
+    return this.campaignReport.getOfferReport(
+      campaignId,
+      from,
+      to,
+      excludeBots === 'true',
+    );
+  }
+
+  @Get('offers/export/csv')
+  async exportOfferCsv(
+    @Res() res: Response,
+    @Query('campaignId') campaignId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('excludeBots') excludeBots?: string,
+  ) {
+    const csv = campaignId
+      ? await this.campaignReport.exportOfferReportCsv(
+          campaignId,
+          from,
+          to,
+          excludeBots === 'true',
+        )
+      : '';
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="offer-report.csv"');
+    res.send(csv);
+  }
+
+  @Get('drilldown/export/csv')
+  async exportDrilldownCsv(
+    @Res() res: Response,
+    @Query('campaignId') campaignId?: string,
+    @Query('dimension') dimension?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('excludeBots') excludeBots?: string,
+  ) {
+    const csv =
+      campaignId && dimension
+        ? await this.campaignReport.exportCampaignDrilldownCsv(
+            campaignId,
+            dimension as never,
+            from,
+            to,
+            excludeBots === 'true',
+          )
+        : '';
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${dimension || 'drilldown'}-report.csv"`,
+    );
+    res.send(csv);
+  }
+
   /** S2S postbacks affiliate networks sent us, most recent first. */
   @Get('incoming-postbacks')
   listIncomingPostbacks(

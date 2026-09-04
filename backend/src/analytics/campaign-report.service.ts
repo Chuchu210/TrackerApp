@@ -5,6 +5,12 @@ import { ConversionEventTypesService } from '../conversion-event-types/conversio
 import { getVisitStats } from './visit-stats';
 import { resolveReportTimezone } from '../shared/tracking/report-timezone';
 import { SettingsService } from '../settings/settings.service';
+import {
+  aggregateDrilldownRows,
+  buildEventColumns,
+  getDrilldownDimension,
+  type DrilldownDimensionId,
+} from './campaign-drilldown.util';
 
 export type CampaignReportRow = {
   campaignId: string;
@@ -515,4 +521,290 @@ export class CampaignReportService {
     }
     return value;
   }
+
+  async getCampaignDrilldownReport(
+    campaignId: string,
+    dimension: DrilldownDimensionId,
+    from?: string,
+    to?: string,
+    excludeBots?: boolean,
+  ): Promise<{
+    rows: CampaignReportRow[];
+    eventColumns: EventColumnDef[];
+    campaign: { id: string; name: string } | null;
+    dimension: DrilldownDimensionId;
+  }> {
+    const campaign = await this.prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: {
+        id: true,
+        name: true,
+        trafficSourceName: true,
+        trafficSource: true,
+        trafficSourceProfile: { select: { name: true } },
+      },
+    });
+    if (!campaign) {
+      return { rows: [], eventColumns: [], campaign: null, dimension };
+    }
+
+    const eventTypeDefs = await this.eventTypes.findAll();
+    const conversionSlugs = new Set(
+      await this.eventTypes.getConversionCountSlugs(),
+    );
+    const clickWhere = this.clickWhere(campaign.id, from, to, excludeBots);
+    const convWhere = this.convWhere(campaign.id, from, to, excludeBots);
+
+    const [clicks, conversions] = await Promise.all([
+      this.prisma.click.findMany({
+        where: clickWhere,
+        select: {
+          clickId: true,
+          offerId: true,
+          offerName: true,
+          landerId: true,
+          landerName: true,
+          pathId: true,
+          affiliateNetworkId: true,
+          affiliateNetwork: true,
+          countryCode: true,
+          country: true,
+          ipAddress: true,
+          device: true,
+          os: true,
+          browser: true,
+          referrer: true,
+          acceptLanguage: true,
+          connectionType: true,
+          externalClickId: true,
+          gclid: true,
+          fbclid: true,
+          trackingId: true,
+          customVariable1: true,
+          customVariable2: true,
+          customVariable3: true,
+          customVariable4: true,
+          customVariable5: true,
+          customVariable6: true,
+          customVariable7: true,
+          customVariable8: true,
+          customVariable9: true,
+          customVariable10: true,
+          visitorId: true,
+          isBot: true,
+        },
+      }),
+      this.prisma.conversion.findMany({
+        where: convWhere,
+        select: {
+          clickId: true,
+          eventType: true,
+          revenue: true,
+          cost: true,
+          status: true,
+          transactionId: true,
+          postbackParam1: true,
+          postbackParam2: true,
+          postbackParam3: true,
+          postbackParam4: true,
+          postbackParam5: true,
+          click: {
+            select: {
+              clickId: true,
+              offerId: true,
+              offerName: true,
+              landerId: true,
+              landerName: true,
+              pathId: true,
+              affiliateNetworkId: true,
+              affiliateNetwork: true,
+              countryCode: true,
+              country: true,
+              ipAddress: true,
+              device: true,
+              os: true,
+              browser: true,
+              referrer: true,
+              acceptLanguage: true,
+              connectionType: true,
+              externalClickId: true,
+              gclid: true,
+              fbclid: true,
+              trackingId: true,
+              customVariable1: true,
+              customVariable2: true,
+              customVariable3: true,
+              customVariable4: true,
+              customVariable5: true,
+              customVariable6: true,
+              customVariable7: true,
+              customVariable8: true,
+              customVariable9: true,
+              customVariable10: true,
+              visitorId: true,
+              isBot: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    const marker =
+      campaign.trafficSourceProfile?.name ||
+      campaign.trafficSourceName ||
+      campaign.trafficSource;
+
+    const rows = aggregateDrilldownRows({
+      dimension,
+      marker,
+      clicks,
+      conversions: conversions.map((row) => ({
+        clickId: row.clickId,
+        eventType: row.eventType,
+        revenue: row.revenue,
+        cost: row.cost,
+        status: row.status,
+        transactionId: row.transactionId,
+        postbackParam1: row.postbackParam1,
+        postbackParam2: row.postbackParam2,
+        postbackParam3: row.postbackParam3,
+        postbackParam4: row.postbackParam4,
+        postbackParam5: row.postbackParam5,
+        countsAsConversion:
+          conversionSlugs.size === 0 || conversionSlugs.has(row.eventType),
+        click: row.click,
+      })),
+    });
+
+    return {
+      rows,
+      eventColumns: buildEventColumns(eventTypeDefs, rows),
+      campaign: { id: campaign.id, name: campaign.name },
+      dimension,
+    };
+  }
+
+  async getOfferReport(
+    campaignId: string,
+    from?: string,
+    to?: string,
+    excludeBots?: boolean,
+  ): Promise<{
+    rows: CampaignReportRow[];
+    eventColumns: EventColumnDef[];
+    campaign: { id: string; name: string } | null;
+  }> {
+    const report = await this.getCampaignDrilldownReport(
+      campaignId,
+      'offers',
+      from,
+      to,
+      excludeBots,
+    );
+    return {
+      rows: report.rows,
+      eventColumns: report.eventColumns,
+      campaign: report.campaign,
+    };
+  }
+
+  exportOfferReportCsv(
+    campaignId: string,
+    from?: string,
+    to?: string,
+    excludeBots?: boolean,
+  ): Promise<string> {
+    return this.getOfferReport(campaignId, from, to, excludeBots).then(
+      ({ rows, eventColumns }) =>
+        this.rowsToCsv(rows, eventColumns, 'Offer name'),
+    );
+  }
+
+  exportCampaignDrilldownCsv(
+    campaignId: string,
+    dimension: DrilldownDimensionId,
+    from?: string,
+    to?: string,
+    excludeBots?: boolean,
+  ): Promise<string> {
+    return this.getCampaignDrilldownReport(
+      campaignId,
+      dimension,
+      from,
+      to,
+      excludeBots,
+    ).then(({ rows, eventColumns }) => {
+      const def = getDrilldownDimension(dimension);
+      return this.rowsToCsv(
+        rows,
+        eventColumns,
+        def?.nameColumnLabel || 'Name',
+      );
+    });
+  }
+
+  private rowsToCsv(
+    rows: CampaignReportRow[],
+    eventColumns: EventColumnDef[],
+    nameHeader: string,
+  ): string {
+    const baseHeaders = [
+      nameHeader,
+      'Marker',
+      'CPC',
+      'Visits',
+      'Unique visits',
+      'Suspicious visits',
+      'Suspicious %',
+      'Conversions',
+      'Cost',
+      'Revenue',
+      'Profit',
+      'ROI %',
+      'CV %',
+      'EPV',
+      'CPV',
+      'Errors',
+      'eCPC',
+      'Tx Transfo %',
+      'Impressions',
+    ];
+    const eventHeaders = eventColumns.flatMap((c) => [
+      c.countLabel,
+      c.revenueLabel,
+    ]);
+    const lines = [[...baseHeaders, ...eventHeaders].join(',')];
+
+    for (const row of rows) {
+      const base = [
+        this.csvEscape(row.campaignName),
+        this.csvEscape(row.marker),
+        row.cpc.toFixed(4),
+        row.visits,
+        row.uniqueVisits,
+        row.suspiciousVisits,
+        row.suspiciousPct,
+        row.conversions,
+        row.cost.toFixed(4),
+        row.revenue.toFixed(4),
+        row.profit.toFixed(4),
+        row.roi.toFixed(2),
+        row.cv.toFixed(2),
+        row.epv.toFixed(6),
+        row.cpv.toFixed(6),
+        row.errors,
+        row.ecpc.toFixed(4),
+        row.txTransfo.toFixed(2),
+        row.impressions,
+      ];
+      const events = eventColumns.flatMap((c) => [
+        row.countByEvent[c.slug] || 0,
+        (row.revenueByEvent[c.slug] || 0).toFixed(4),
+      ]);
+      lines.push([...base, ...events].join(','));
+    }
+
+    return lines.join('\n');
+  }
+
 }
