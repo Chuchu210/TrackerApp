@@ -25,6 +25,8 @@ const groups: NavGroup[] = [
       { href: '/', label: 'Campaigns', icon: 'M3 7h18M3 12h18M3 17h18' },
       { href: '/routing', label: 'Paths & rotation', icon: 'M6 3v12a3 3 0 0 0 3 3h6M6 3l-3 3m3-3l3 3M18 21l3-3m-3 3l-3-3' },
       { href: '/landers', label: 'Landers', icon: 'M4 4h16v16H4z M8 8h8v8H8z' },
+      { href: '/offers', label: 'Offers', icon: 'M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82zM7 7h.01' },
+      { href: '/affiliate-networks', label: 'Affiliate networks', icon: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z' },
       { href: '/domains', label: 'Domains', icon: 'M12 3l8 4v10l-8 4-8-4V7l8-4z' },
     ],
   },

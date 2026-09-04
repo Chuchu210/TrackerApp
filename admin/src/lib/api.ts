@@ -676,6 +676,39 @@ export interface AppSettings {
   fraudVelocityMaxClicks: number | null;
 }
 
+export interface AffiliateNetwork {
+  id: string;
+  name: string;
+  slug: string;
+  clickIdParam: string;
+  clickIdToken?: string | null;
+  payoutToken?: string | null;
+  transactionIdToken?: string | null;
+  eventTypeToken?: string | null;
+  defaultCurrency: string;
+  postbackUrlTemplate?: string | null;
+  active: boolean;
+  createdAt: string;
+  _count?: { offers: number };
+  offers?: { id: string; name: string; slug: string; payout: number; active: boolean }[];
+}
+
+export interface Offer {
+  id: string;
+  name: string;
+  slug: string;
+  url: string;
+  payout: number;
+  currency: string;
+  country?: string | null;
+  active: boolean;
+  affiliateNetworkId?: string | null;
+  affiliateNetwork?: AffiliateNetwork | null;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { offerClicks: number };
+}
+
 export interface PathCondition {
   dimension: 'country' | 'device' | 'os' | 'browser' | 'connectionType';
   operator: 'in' | 'not_in';
@@ -1093,6 +1126,40 @@ export const trackerApi = {
   runAutoWinner: () =>
     api<{ pathsEvaluated: number; winnersPicked: number }>(`/api/paths/auto-winner/run`, {
       method: 'POST',
+    }),
+
+  // Offer catalog + affiliate networks.
+  getOffers: (params?: Record<string, string>) => {
+    const qs = params ? `?${new URLSearchParams(params)}` : '';
+    return api<{ items: Offer[]; total: number }>(`/api/offers${qs}`);
+  },
+  getOffer: (id: string) => api<Offer>(`/api/offers/${id}`),
+  getOfferMeta: () =>
+    api<{ countries: string[]; currencies: string[] }>('/api/offers/meta'),
+  createOffer: (data: Partial<Offer>) =>
+    api<Offer>('/api/offers', { method: 'POST', body: JSON.stringify(data) }),
+  updateOffer: (id: string, data: Partial<Offer>) =>
+    api<Offer>(`/api/offers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteOffer: (id: string) =>
+    api<{ deleted: boolean; id: string }>(`/api/offers/${id}`, { method: 'DELETE' }),
+
+  getAffiliateNetworks: (all?: boolean) =>
+    api<AffiliateNetwork[]>(`/api/affiliate-networks${all ? '?all=1' : ''}`),
+  getAffiliateNetwork: (id: string) =>
+    api<AffiliateNetwork>(`/api/affiliate-networks/${id}`),
+  createAffiliateNetwork: (data: Partial<AffiliateNetwork>) =>
+    api<AffiliateNetwork>('/api/affiliate-networks', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateAffiliateNetwork: (id: string, data: Partial<AffiliateNetwork>) =>
+    api<AffiliateNetwork>(`/api/affiliate-networks/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteAffiliateNetwork: (id: string) =>
+    api<{ deleted: boolean; id: string }>(`/api/affiliate-networks/${id}`, {
+      method: 'DELETE',
     }),
 
   // Global settings (notifications, currency/FX, timezone, fraud thresholds).
