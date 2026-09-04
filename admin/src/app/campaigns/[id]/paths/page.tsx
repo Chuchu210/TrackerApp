@@ -23,6 +23,7 @@ import {
   formatApiError,
   type Campaign,
   type CampaignPath,
+  type Offer,
   type PathCondition,
   type PathVariant,
 } from '@/lib/api';
@@ -43,15 +44,23 @@ export default function CampaignPathsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newPathName, setNewPathName] = useState('');
+  const [offers, setOffers] = useState<Offer[]>([]);
 
   const load = useCallback(async () => {
     try {
-      const [c, p] = await Promise.all([
+      const [c, p, o] = await Promise.all([
         trackerApi.getCampaign(id),
         trackerApi.getCampaignPaths(id),
+        // Only active offers are selectable; a failure here must not break the
+        // page, the picker just falls back to a plain URL.
+        trackerApi
+          .getOffers({ active: 'true', limit: '200' })
+          .then((r) => r.items)
+          .catch(() => []),
       ]);
       setCampaign(c);
       setPaths(p);
+      setOffers(o);
       setError(null);
     } catch (err) {
       setError(formatApiError(err));
@@ -120,6 +129,7 @@ export default function CampaignPathsPage() {
         label: v.label,
         kind: v.kind,
         destinationUrl: v.destinationUrl,
+        offerId: v.offerId ?? null,
         weight: v.weight,
         active: v.active,
       });
@@ -355,6 +365,27 @@ export default function CampaignPathsPage() {
                   className="w-36"
                   placeholder="Label"
                 />
+                <Select
+                  value={v.offerId || ''}
+                  onChange={(e) => {
+                    const offerId = e.target.value || null;
+                    const picked = offers.find((o) => o.id === offerId);
+                    // Selecting an offer fills the destination from the catalog,
+                    // so the two can't silently drift apart.
+                    updateVariantLocal(path.id, v.id, {
+                      offerId,
+                      ...(picked ? { destinationUrl: picked.url } : {}),
+                    });
+                  }}
+                  className="w-52"
+                >
+                  <option value="">No offer (plain URL)</option>
+                  {offers.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name}
+                    </option>
+                  ))}
+                </Select>
                 <Input
                   value={v.destinationUrl}
                   onChange={(e) =>
