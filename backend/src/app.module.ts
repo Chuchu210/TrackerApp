@@ -21,6 +21,8 @@ import { PlacementsModule } from './placements/placements.module';
 import { RulesModule } from './rules/rules.module';
 import { PathsModule } from './paths/paths.module';
 import { SettingsModule } from './settings/settings.module';
+import { OffersModule } from './offers/offers.module';
+import { AffiliateNetworksModule } from './affiliate-networks/affiliate-networks.module';
 
 @Module({
   imports: [
@@ -52,6 +54,8 @@ import { SettingsModule } from './settings/settings.module';
     ConversionEventTypesModule,
     PlatformSyncModule,
     LandersModule,
+    OffersModule,
+    AffiliateNetworksModule,
     TargetsModule,
     PlacementsModule,
     RulesModule,

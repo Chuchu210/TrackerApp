@@ -685,3 +685,65 @@ model PathVariant {
   @@index([pathId, active])
   @@map("path_variants")
 }
+
+/// An affiliate network we send traffic to. The token fields describe how the
+/// network fills its own postback macros, so a postback URL can be templated
+/// per network instead of per campaign.
+model AffiliateNetwork {
+  id                  String   @id @default(uuid())
+  name                String
+  slug                String   @unique
+  clickIdParam        String   @default("subid") @map("click_id_param")
+  clickIdToken        String?  @map("click_id_token")
+  payoutToken         String?  @map("payout_token")
+  transactionIdToken  String?  @map("transaction_id_token")
+  eventTypeToken      String?  @map("event_type_token")
+  defaultCurrency     String   @default("EUR") @map("default_currency")
+  postbackUrlTemplate String?  @map("postback_url_template")
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  offers Offer[]
+
+  @@map("affiliate_networks")
+}
+
+/// A destination offer with its payout. Holding the payout server-side lets a
+/// conversion resolve its own revenue instead of trusting a client-supplied
+/// value on the public tracking endpoint.
+model Offer {
+  id                 String            @id @default(uuid())
+  name               String
+  slug               String            @unique
+  url                String
+  payout             Float             @default(0)
+  currency           String            @default("EUR")
+  country            String?
+  active             Boolean           @default(true)
+  affiliateNetworkId String?           @map("affiliate_network_id")
+  affiliateNetwork   AffiliateNetwork? @relation(fields: [affiliateNetworkId], references: [id], onDelete: SetNull)
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  offerClicks OfferClick[]
+
+  @@index([name])
+  @@index([updatedAt])
+  @@map("offers")
+}
+
+/// Records which offer a click was routed to, so a later conversion can be
+/// attributed to the offer that actually served it.
+model OfferClick {
+  id         String   @id @default(uuid())
+  clickId    String   @map("click_id")
+  offerId    String   @map("offer_id")
+  offer      Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  campaignId String?  @map("campaign_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([clickId])
+  @@index([offerId])
+  @@map("offer_clicks")
+}
