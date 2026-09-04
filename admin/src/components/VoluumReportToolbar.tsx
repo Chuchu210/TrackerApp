@@ -61,7 +61,7 @@ function ToolbarMenu({
       <Button type="button" variant="secondary" size="sm" disabled={disabled} onClick={() => setOpen((v) => !v)}>
         {label}
         <span className="ml-0.5 text-[10px] text-zinc-400" aria-hidden>
-          â–¾
+          ▾
         </span>
       </Button>
       {open && !disabled && (
@@ -159,7 +159,7 @@ export function VoluumReportToolbar({
           <button type="button" className={`font-medium ${linkClass}`} onClick={onBackToCampaigns}>
             Campaigns
           </button>
-          <span className="text-zinc-300 dark:text-zinc-600">â€º</span>
+          <span className="text-zinc-300 dark:text-zinc-600">›</span>
           <span className="truncate font-medium text-zinc-800 dark:text-zinc-100">
             {selectedCampaign.name}
           </span>

@@ -52,7 +52,7 @@ function ToolbarMenu({
       >
         {label}
         <span className="ml-1 text-[10px] text-zinc-400" aria-hidden>
-          â–¾
+          ▾
         </span>
       </Button>
       {open && !disabled && (

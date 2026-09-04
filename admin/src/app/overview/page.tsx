@@ -321,11 +321,11 @@ export default function OverviewPage() {
   };
 
   const kpiValue = (key: string) => {
-    if (!overview) return 'â€”';
+    if (!overview) return '—';
     const v = (overview as unknown as Record<string, unknown>)[key];
     if (v === undefined || v === null) return '0';
     if (key === 'revenue' || key === 'cost' || key === 'profit') {
-      return `â‚¬${Number(v).toFixed(2)}`;
+      return `€${Number(v).toFixed(2)}`;
     }
     return String(v);
   };
@@ -390,7 +390,7 @@ export default function OverviewPage() {
                   >
                     <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{item.title}</p>
                     <p className="mt-1 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">{item.message}</p>
-                    <p className="mt-2 text-xs font-medium text-indigo-600 dark:text-indigo-400">â†’ {item.action}</p>
+                    <p className="mt-2 text-xs font-medium text-indigo-600 dark:text-indigo-400">→ {item.action}</p>
                   </div>
                 ))}
               </div>

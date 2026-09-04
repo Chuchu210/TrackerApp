@@ -140,7 +140,7 @@ export function OverviewColumnPicker({
       <Button variant="secondary" size="sm" onClick={() => setOpen((v) => !v)}>
         Columns
         <span className="ml-1 text-[10px] text-zinc-400" aria-hidden>
-          â–¾
+          ▾
         </span>
       </Button>
       {open && (
@@ -200,7 +200,7 @@ export function OverviewColumnPicker({
                     <span className="text-xs text-zinc-800 dark:text-zinc-200 truncate">
                       {template.name}
                       {lastApplied === template.name ? (
-                        <span className="ml-1 text-indigo-600 dark:text-indigo-400">Â· applied</span>
+                        <span className="ml-1 text-indigo-600 dark:text-indigo-400">· applied</span>
                       ) : null}
                     </span>
                     <span className="flex shrink-0 gap-2">

@@ -19,7 +19,7 @@ function safeNum(n: unknown): number {
 }
 
 function fmtMoney(n: unknown) {
-  return `â‚¬${safeNum(n).toFixed(4)}`;
+  return `€${safeNum(n).toFixed(4)}`;
 }
 
 function fmtPct(n: unknown) {
@@ -79,7 +79,7 @@ function FilterFunnel({
             : 'text-zinc-400 hover:bg-zinc-200/80 hover:text-zinc-600 dark:hover:bg-zinc-700',
         ].join(' ')}
       >
-        â–¾
+        ▾
       </button>
       {open ? (
         <div
@@ -90,7 +90,7 @@ function FilterFunnel({
             autoFocus
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            placeholder="Filterâ€¦"
+            placeholder="Filter…"
             className="w-full rounded-lg border border-zinc-200 px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-800"
           />
           {active ? (
@@ -268,7 +268,7 @@ export function CampaignReportTable({
       onClick={() => toggleSort(key)}
     >
       {label}
-      {sortKey === key ? (sortDir === 'asc' ? ' â†‘' : ' â†“') : ''}
+      {sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
       <FilterFunnel value={columnFilters[key] || ''} onChange={(v) => setFilter(key, v)} />
     </button>
   );
@@ -421,7 +421,7 @@ export function CampaignReportTable({
                   </Td>
                 )}
                 {showCampaignMeta && visible('marker') && (
-                  <Td>{row.marker || 'â€”'}</Td>
+                  <Td>{row.marker || '—'}</Td>
                 )}
                 {showCampaignMeta && visible('campaignId') && (
                   <Td className="max-w-[180px] truncate font-mono text-[10px] text-zinc-500">
