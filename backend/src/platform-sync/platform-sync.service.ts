@@ -11,6 +11,7 @@ import { OutbrainSyncAdapter } from './adapters/outbrain.adapter';
 import { TaboolaSyncAdapter } from './adapters/taboola.adapter';
 import { MgidSyncAdapter } from './adapters/mgid.adapter';
 import { BingSyncAdapter } from './adapters/bing.adapter';
+import { OpenAiSyncAdapter } from './adapters/openai.adapter';
 import { ManualSyncAdapter } from './adapters/manual.adapter';
 import {
   CreatePlatformConnectionDto,
@@ -101,6 +102,7 @@ export class PlatformSyncService {
       new TaboolaSyncAdapter(this.http),
       new MgidSyncAdapter(this.http),
       new BingSyncAdapter(),
+      new OpenAiSyncAdapter(this.http),
       new ManualSyncAdapter(AdPlatform.powerspace),
       new ManualSyncAdapter(AdPlatform.organic),
       new ManualSyncAdapter(AdPlatform.native),

@@ -90,6 +90,7 @@ enum AdPlatform {
   taboola
   mgid
   bing
+  openai
   powerspace
   organic
   native
