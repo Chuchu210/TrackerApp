@@ -483,8 +483,13 @@ model CampaignPlatformMapping {
   createdAt          DateTime   @default(now()) @map("created_at")
   updatedAt          DateTime   @updatedAt @map("updated_at")
 
-  @@unique([campaignId, platform])
-  @@index([platform, externalCampaignId])
+  // Uniqueness belongs on the external campaign, not the tracker campaign:
+  // several platform campaigns (device/placement splits, copies) legitimately
+  // drive the same tracker campaign. Keying on [campaignId, platform] made the
+  // upsert overwrite, so only the last match survived and every other
+  // campaign's spend was silently dropped at import.
+  @@unique([platform, externalCampaignId])
+  @@index([campaignId])
   @@map("campaign_platform_mappings")
 }
 

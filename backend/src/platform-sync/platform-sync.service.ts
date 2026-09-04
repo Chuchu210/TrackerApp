@@ -340,11 +340,13 @@ export class PlatformSyncService {
   }
 
   createMapping(dto: CreateCampaignMappingDto) {
+    // Keyed on the external campaign: re-mapping one platform campaign must
+    // not disturb the others already pointing at the same tracker campaign.
     return this.prisma.campaignPlatformMapping.upsert({
       where: {
-        campaignId_platform: {
-          campaignId: dto.campaignId,
+        platform_externalCampaignId: {
           platform: dto.platform,
+          externalCampaignId: dto.externalCampaignId,
         },
       },
       create: {
@@ -352,7 +354,7 @@ export class PlatformSyncService {
         platform: dto.platform,
         externalCampaignId: dto.externalCampaignId,
       },
-      update: { externalCampaignId: dto.externalCampaignId },
+      update: { campaignId: dto.campaignId },
     });
   }
 
