@@ -439,6 +439,7 @@ export default function OverviewPage() {
             onSelectDimension={openDimension}
             onExport={exportCsv}
             onRefresh={refreshReport}
+            rowCount={displayRows.length}
             columnsSlot={
               <OverviewColumnPicker
                 eventColumns={displayEventColumns}

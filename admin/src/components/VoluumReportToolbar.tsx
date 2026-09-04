@@ -105,6 +105,7 @@ export function VoluumReportToolbar({
   onSelectDimension,
   onExport,
   onRefresh,
+  rowCount,
   columnsSlot,
 }: {
   reportLevel: ReportLevel;
@@ -115,17 +116,23 @@ export function VoluumReportToolbar({
   onSelectDimension: (dimension: ReportDimensionId) => void;
   onExport: () => void;
   onRefresh: () => void;
+  rowCount: number;
   columnsSlot: ReactNode;
 }) {
   const onDrilldown = reportLevel !== 'campaigns';
   const hasRowSelection = Boolean(selectedRowId);
   const hasCampaignContext = Boolean(selectedCampaign);
 
+  // A dimension is reachable as soon as there is something to drill into:
+  // either an open campaign report, or a selected row (onSelectDimension
+  // opens the report first in that case).
+  const canDrill = hasCampaignContext || hasRowSelection;
+
   const reportItems: MenuItem[] = REPORT_DIMENSIONS.map((dim) => ({
     id: dim.id,
     label: dim.label,
     active: reportLevel === dim.id,
-    disabled: !hasCampaignContext,
+    disabled: !canDrill,
     onClick: () => onSelectDimension(dim.id),
   }));
 
@@ -140,14 +147,14 @@ export function VoluumReportToolbar({
       id: dim.id,
       label: dim.label,
       active: reportLevel === dim.id,
-      disabled: !hasCampaignContext,
+      disabled: !canDrill,
       onClick: () => onSelectDimension(dim.id),
     })),
     ...REPORT_MENU_DIMENSIONS.map((dim) => ({
       id: dim.id,
       label: dim.label,
       active: reportLevel === dim.id,
-      disabled: !hasCampaignContext,
+      disabled: !canDrill,
       onClick: () => onSelectDimension(dim.id),
     })),
   ];
@@ -168,51 +175,27 @@ export function VoluumReportToolbar({
 
       <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
         <div className="flex flex-wrap items-center gap-1.5">
-          {toolbarLink('/tracker/campaigns', '+ Create', 'success')}
+          {toolbarLink('/', '+ Create', 'success')}
           <Button
             variant="secondary"
             size="sm"
-            disabled={!hasRowSelection && !hasCampaignContext}
+            disabled={!canDrill}
             onClick={onOpenReport}
           >
             Report
           </Button>
-          <ToolbarMenu
-            label="Report"
-            disabled={!hasRowSelection && !hasCampaignContext}
-            items={reportItems}
-          />
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={!hasRowSelection && !hasCampaignContext}
-            onClick={onOpenReport}
-          >
-            Report in new tab
-          </Button>
+          <ToolbarMenu label="Report" disabled={!canDrill} items={reportItems} />
           {selectedRowId ? (
-            toolbarLink(`/tracker/campaigns/${selectedRowId}`, 'Edit')
+            toolbarLink(`/campaigns/${selectedRowId}`, 'Edit')
           ) : (
             <Button variant="secondary" size="sm" disabled>
               Edit
             </Button>
           )}
-          <Button variant="secondary" size="sm" disabled>
-            Duplicate
-          </Button>
-          <ToolbarMenu label="Tags" disabled items={[]} />
-          <ToolbarMenu label="Actions" disabled items={[]} />
-          <Button variant="ghost" size="sm" disabled>
-            Update cost
-          </Button>
-          <Button variant="ghost" size="sm" disabled>
-            Markers
-          </Button>
           <Button variant="secondary" size="sm" onClick={onExport}>
-            Export/Import
+            Export CSV
           </Button>
-          {toolbarLink('/tracker/rules', 'Automizer rule')}
-          <ToolbarMenu label="More" disabled items={[]} />
+          {toolbarLink('/rules', 'Automizer rule')}
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
@@ -221,7 +204,9 @@ export function VoluumReportToolbar({
           <Button variant="secondary" size="sm" onClick={onRefresh}>
             Refresh
           </Button>
-          <span className={`px-1 text-xs ${mutedTextClass}`}>1 of 1</span>
+          <span className={`px-1 text-xs ${mutedTextClass}`}>
+            {rowCount} {rowCount === 1 ? 'row' : 'rows'}
+          </span>
         </div>
       </div>
     </div>
