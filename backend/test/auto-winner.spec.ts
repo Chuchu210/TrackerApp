@@ -2,6 +2,7 @@ import {
   computeWinner,
   parseAutoWinnerConfig,
   DEFAULT_AUTO_WINNER_CONFIG,
+  twoProportionZ,
 } from '../src/shared/tracking/auto-winner';
 
 const cfg = { minVisitsPerVariant: 200, minTotalVisits: 500, minMarginPct: 20 };
@@ -71,6 +72,74 @@ describe('computeWinner', () => {
   });
 });
 
+describe('computeWinner statistical safety', () => {
+  it('refuses a winner on a low-conversion split that clears the ratio gates', () => {
+    // The exact trap on a ~1.5% funnel: 200 visits is ~3 conversions, and
+    // 4-vs-3 clears both the visit floor and the 20% relative margin.
+    const r = computeWinner([
+      { variantId: 'a', visits: 300, conversions: 4 },
+      { variantId: 'b', visits: 300, conversions: 3 },
+    ]);
+    expect(r.winnerId).toBeNull();
+    expect(r.reason).toBe('leader_below_min_conversions');
+  });
+
+  it('refuses to promote a variant just because the other has zero conversions', () => {
+    const r = computeWinner([
+      { variantId: 'a', visits: 300, conversions: 1 },
+      { variantId: 'b', visits: 300, conversions: 0 },
+    ]);
+    expect(r.winnerId).toBeNull();
+  });
+
+  it('refuses a large-volume split that is not significant', () => {
+    const r = computeWinner([
+      { variantId: 'a', visits: 5000, conversions: 130 },
+      { variantId: 'b', visits: 5000, conversions: 105 },
+    ]);
+    expect(r.winnerId).toBeNull();
+    expect(r.reason).toBe('not_statistically_significant');
+  });
+
+  it('promotes a winner once the gap is both large and significant', () => {
+    const r = computeWinner([
+      { variantId: 'a', visits: 5000, conversions: 250 },
+      { variantId: 'b', visits: 5000, conversions: 100 },
+    ]);
+    expect(r.winnerId).toBe('a');
+    expect(r.reason).toBe('clear_winner');
+  });
+});
+
+describe('twoProportionZ', () => {
+  it('returns 0 when a variant has no traffic', () => {
+    expect(
+      twoProportionZ(
+        { variantId: 'a', visits: 0, conversions: 0 },
+        { variantId: 'b', visits: 100, conversions: 5 },
+      ),
+    ).toBe(0);
+  });
+
+  it('returns 0 when neither variant converted', () => {
+    expect(
+      twoProportionZ(
+        { variantId: 'a', visits: 100, conversions: 0 },
+        { variantId: 'b', visits: 100, conversions: 0 },
+      ),
+    ).toBe(0);
+  });
+
+  it('is positive when the leader converts better', () => {
+    expect(
+      twoProportionZ(
+        { variantId: 'a', visits: 1000, conversions: 100 },
+        { variantId: 'b', visits: 1000, conversions: 50 },
+      ),
+    ).toBeGreaterThan(1.96);
+  });
+});
+
 describe('parseAutoWinnerConfig', () => {
   it('falls back to defaults on invalid input', () => {
     expect(parseAutoWinnerConfig(undefined, undefined, undefined)).toEqual(
@@ -79,10 +148,12 @@ describe('parseAutoWinnerConfig', () => {
   });
 
   it('parses provided values', () => {
-    expect(parseAutoWinnerConfig('100', '300', '15')).toEqual({
+    expect(parseAutoWinnerConfig('100', '300', '15', '10', '1.65')).toEqual({
       minVisitsPerVariant: 100,
       minTotalVisits: 300,
       minMarginPct: 15,
+      minConversionsForWinner: 10,
+      minZScore: 1.65,
     });
   });
 });

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { PostbackNetwork, ConversionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MediagoStrategy } from './strategies/mediago.strategy';
@@ -67,12 +68,25 @@ export class PostbacksService {
     for (const strategy of this.strategies) {
       if (!strategy.canHandle(config, campaignContext)) continue;
 
-      const result = await strategy.send(
-        conversion.click,
-        conversion,
-        config,
-        campaignContext,
-      );
+      let result;
+      try {
+        result = await strategy.send(
+          conversion.click,
+          conversion,
+          config,
+          campaignContext,
+        );
+      } catch (err) {
+        // A strategy that throws used to abort processConversion entirely,
+        // leaving the conversion stuck in `pending` with no log to explain it.
+        const message = err instanceof Error ? err.message : String(err);
+        result = {
+          success: false,
+          method: 'UNKNOWN',
+          url: '',
+          response: `Strategy threw: ${message}`,
+        };
+      }
       anySent = true;
 
       await this.prisma.postbackLog.create({
@@ -104,8 +118,64 @@ export class PostbacksService {
             ? ConversionStatus.sent
             : ConversionStatus.failed
           : ConversionStatus.skipped,
+        postbackAttempts: { increment: 1 },
+        lastPostbackAt: new Date(),
       },
     });
+  }
+
+  /** Attempts before a conversion is left alone for manual inspection. */
+  private static readonly MAX_POSTBACK_ATTEMPTS = 6;
+
+  /**
+   * Retry deliveries that never completed. Without this a failed postback was
+   * only ever retried by hand from the admin, so a transient network blip on
+   * the network's side quietly cost a conversion.
+   *
+   * Backoff is derived from the attempt count rather than stored per row:
+   * a conversion is eligible once it has been idle for 5 minutes x 2^attempts.
+   */
+  @Cron('*/5 * * * *')
+  async retryUnfinished(): Promise<{ retried: number }> {
+    try {
+      const candidates = await this.prisma.conversion.findMany({
+        where: {
+          status: { in: [ConversionStatus.pending, ConversionStatus.failed] },
+          postbackAttempts: { lt: PostbacksService.MAX_POSTBACK_ATTEMPTS },
+        },
+        select: { id: true, postbackAttempts: true, lastPostbackAt: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+        take: 100,
+      });
+
+      const now = Date.now();
+      let retried = 0;
+
+      for (const row of candidates) {
+        const idleSince = (row.lastPostbackAt ?? row.createdAt).getTime();
+        const waitMs = 5 * 60_000 * Math.pow(2, row.postbackAttempts);
+        if (now - idleSince < waitMs) continue;
+
+        // Claim the row before working on it so two overlapping sweeps (or a
+        // sweep racing a manual retry) cannot double-send the same postback.
+        const claimed = await this.prisma.conversion.updateMany({
+          where: { id: row.id, postbackAttempts: row.postbackAttempts },
+          data: { lastPostbackAt: new Date() },
+        });
+        if (claimed.count !== 1) continue;
+
+        await this.processConversion(row.id).catch((err) => {
+          this.logger.error(`Retry failed for conversion ${row.id}`, err);
+        });
+        retried++;
+      }
+
+      if (retried > 0) this.logger.log(`Retried ${retried} unfinished postback(s)`);
+      return { retried };
+    } catch (err) {
+      this.logger.error('Postback retry sweep failed', err);
+      return { retried: 0 };
+    }
   }
 
   async retryConversion(conversionId: string): Promise<void> {

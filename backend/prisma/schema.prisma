@@ -199,6 +199,13 @@ enum LanderStatus {
   ready
 }
 
+enum LanderHealth {
+  unknown
+  healthy
+  unreachable
+  tracker_missing
+}
+
 model Lander {
   id            String       @id @default(uuid())
   name          String
@@ -212,6 +219,13 @@ model Lander {
   injectTracker Boolean      @default(true) @map("inject_tracker")
   trackerAttrs  Json?        @map("tracker_attrs")
   status        LanderStatus @default(draft)
+
+  // Result of the periodic probe against publicUrl. A deploy reporting success
+  // is not proof the page is live and carries the tracker.
+  healthStatus      LanderHealth @default(unknown) @map("health_status")
+  healthCheckedAt   DateTime?    @map("health_checked_at")
+  healthError       String?      @map("health_error")
+
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 
@@ -396,6 +410,11 @@ model Conversion {
   postbackParam4      String? @map("postback_param_4")
   postbackParam5      String? @map("postback_param_5")
 
+  // Postback delivery bookkeeping, so a failed send can be retried with
+  // backoff instead of sitting silently in `pending` forever.
+  postbackAttempts  Int       @default(0) @map("postback_attempts")
+  lastPostbackAt    DateTime? @map("last_postback_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -403,6 +422,7 @@ model Conversion {
 
   @@unique([clickId, eventType])
   @@index([campaignId, createdAt])
+  @@index([status, lastPostbackAt])
   @@map("conversions")
 }
 

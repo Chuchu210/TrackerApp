@@ -148,4 +148,42 @@ describe('resolveRouting', () => {
     expect(decision.destination).toBe('https://path-dest');
     expect(decision.variantId).toBeUndefined();
   });
+  it('carries the offer of the selected variant into the decision', () => {
+    const path: RoutablePath = {
+      id: 'path1',
+      weight: 100,
+      active: true,
+      conditions: [],
+      destinationUrl: null,
+      variants: [
+        {
+          id: 'var1',
+          destinationUrl: 'https://offer-a',
+          weight: 100,
+          active: true,
+          offerId: 'offer-uuid',
+          offerName: 'Auto Insurance US',
+        },
+      ],
+    };
+    const decision = resolveRouting('https://camp-dest', [path], {}, () => 0.5);
+    expect(decision.offerId).toBe('offer-uuid');
+    expect(decision.offerName).toBe('Auto Insurance US');
+  });
+
+  it('reports no offer for a plain URL variant, leaving legacy behaviour intact', () => {
+    const path: RoutablePath = {
+      id: 'path1',
+      weight: 100,
+      active: true,
+      conditions: [],
+      destinationUrl: null,
+      variants: [
+        { id: 'var1', destinationUrl: 'https://offer-a', weight: 100, active: true },
+      ],
+    };
+    const decision = resolveRouting('https://camp-dest', [path], {}, () => 0.5);
+    expect(decision.offerId).toBeNull();
+    expect(decision.offerName).toBeNull();
+  });
 });

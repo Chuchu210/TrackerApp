@@ -17,6 +17,7 @@ import type { Response } from 'express';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { LandersService } from './landers.service';
+import { LanderHealthService } from './lander-health.service';
 import { CreateLanderDto } from './dto/create-lander.dto';
 import { UpdateLanderDto } from './dto/update-lander.dto';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
@@ -24,7 +25,16 @@ import { ApiKeyGuard } from '../common/guards/api-key.guard';
 @Controller('api/landers')
 @UseGuards(ApiKeyGuard)
 export class LandersController {
-  constructor(private readonly landers: LandersService) {}
+  constructor(
+    private readonly landers: LandersService,
+    private readonly health: LanderHealthService,
+  ) {}
+
+  /** Probe every ready lander now instead of waiting for the hourly sweep. */
+  @Post('health-check')
+  runHealthCheck() {
+    return this.health.checkAll();
+  }
 
   @Get()
   findAll() {
