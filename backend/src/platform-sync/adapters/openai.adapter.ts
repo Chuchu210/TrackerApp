@@ -11,6 +11,48 @@ const PAGE_LIMIT = 2000;
 /** Guard against an unbounded loop if the cursor ever stops advancing. */
 const MAX_PAGES = 25;
 
+const HOUR_SECONDS = 3600;
+
+/**
+ * The API rejects any time range whose bounds are not on a full hour in the ad
+ * account's timezone ("minute and second must be 0"). Account timezones are
+ * whole-hour offsets, so flooring to a UTC hour satisfies it.
+ */
+function toHourAlignedUnix(date: Date): number {
+  const seconds = Math.floor(date.getTime() / 1000);
+  return seconds - (seconds % HOUR_SECONDS);
+}
+
+/**
+ * Built by hand rather than handed to axios: axios appends "[]" to array keys,
+ * which would turn `fields[]` into `fields[][]` and be rejected.
+ */
+function buildInsightsQuery(params: {
+  aggregationLevel: string;
+  timeGranularity: string;
+  fields: string[];
+  start: number;
+  end: number;
+  limit: number;
+  after?: string;
+}): string {
+  const qs = new URLSearchParams();
+  qs.set('aggregation_level', params.aggregationLevel);
+  qs.set('time_granularity', params.timeGranularity);
+  for (const field of params.fields) qs.append('fields[]', field);
+  qs.append(
+    'time_ranges[]',
+    JSON.stringify({
+      type: 'unix_range',
+      start: String(params.start),
+      end: String(params.end),
+    }),
+  );
+  qs.set('limit', String(params.limit));
+  if (params.after) qs.set('after', params.after);
+  return qs.toString();
+}
+
 type InsightsRow = {
   readable_time?: string;
   start_time?: number;
@@ -49,20 +91,18 @@ export class OpenAiSyncAdapter implements PlatformSyncAdapter {
     if (!apiKey) return false;
     try {
       // Cheapest possible probe: one row over a one-day window.
-      const now = Math.floor(Date.now() / 1000);
+      const end = toHourAlignedUnix(new Date());
+      const query = buildInsightsQuery({
+        aggregationLevel: 'ad_account',
+        timeGranularity: 'none',
+        fields: ['ad_account.spend'],
+        start: end - 24 * HOUR_SECONDS,
+        end,
+        limit: 1,
+      });
       await firstValueFrom(
-        this.http.get(`${OPENAI_ADS_API}/ad_account/insights`, {
+        this.http.get(`${OPENAI_ADS_API}/ad_account/insights?${query}`, {
           headers: { Authorization: `Bearer ${apiKey}` },
-          params: {
-            aggregation_level: 'ad_account',
-            time_granularity: 'none',
-            'time_ranges[]': JSON.stringify({
-              type: 'unix_range',
-              start: String(now - 86400),
-              end: String(now),
-            }),
-            limit: 1,
-          },
         }),
       );
       return true;
@@ -84,16 +124,14 @@ export class OpenAiSyncAdapter implements PlatformSyncAdapter {
     const rows: SpendMetricRow[] = [];
     let after: string | undefined;
 
+    const start = toHourAlignedUnix(from);
+    const end = toHourAlignedUnix(to);
+
     for (let page = 0; page < MAX_PAGES; page++) {
-      const params: Record<string, unknown> = {
-        aggregation_level: 'campaign',
-        time_granularity: 'daily',
-        'time_ranges[]': JSON.stringify({
-          type: 'unix_range',
-          start: String(Math.floor(from.getTime() / 1000)),
-          end: String(Math.floor(to.getTime() / 1000)),
-        }),
-        'fields[]': [
+      const query = buildInsightsQuery({
+        aggregationLevel: 'campaign',
+        timeGranularity: 'daily',
+        fields: [
           'metadata.readable_time',
           'campaign.id',
           'campaign.name',
@@ -101,15 +139,17 @@ export class OpenAiSyncAdapter implements PlatformSyncAdapter {
           'campaign.clicks',
           'campaign.spend',
         ],
+        start,
+        end,
         limit: PAGE_LIMIT,
-      };
-      if (after) params.after = after;
+        after,
+      });
 
       const { data } = await firstValueFrom(
-        this.http.get<InsightsResponse>(`${OPENAI_ADS_API}/ad_account/insights`, {
-          headers: { Authorization: `Bearer ${apiKey}` },
-          params,
-        }),
+        this.http.get<InsightsResponse>(
+          `${OPENAI_ADS_API}/ad_account/insights?${query}`,
+          { headers: { Authorization: `Bearer ${apiKey}` } },
+        ),
       );
 
       for (const item of data?.data || []) {

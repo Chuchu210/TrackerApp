@@ -1,7 +1,7 @@
 import { of } from 'rxjs';
 import { OpenAiSyncAdapter } from '../src/platform-sync/adapters/openai.adapter';
 
-type GetCall = { url: string; config: { headers: Record<string, string>; params: Record<string, unknown> } };
+type GetCall = { url: string; config: { headers: Record<string, string> } };
 
 function makeHttp(pages: unknown[]) {
   const calls: GetCall[] = [];
@@ -52,8 +52,12 @@ describe('OpenAiSyncAdapter.fetchMetrics', () => {
       },
     ]);
     expect(calls[0].config.headers.Authorization).toBe('Bearer sk-test');
-    expect(calls[0].config.params.aggregation_level).toBe('campaign');
-    expect(calls[0].config.params.time_granularity).toBe('daily');
+    const url = calls[0].url;
+    expect(url).toContain('aggregation_level=campaign');
+    expect(url).toContain('time_granularity=daily');
+    // Array params must stay `fields[]`, not axios's `fields[][]`.
+    expect(url).toContain('fields%5B%5D=campaign.spend');
+    expect(url).not.toContain('fields%5B%5D%5B%5D');
   });
 
   it('returns nothing without an API key rather than calling the API', async () => {
@@ -80,7 +84,7 @@ describe('OpenAiSyncAdapter.fetchMetrics', () => {
     const rows = await adapter.fetchMetrics({ apiKey: 'sk-test' }, null, from, to);
 
     expect(rows.map((r) => r.externalCampaignId)).toEqual(['a', 'b']);
-    expect(calls[1].config.params.after).toBe('cursor-1');
+    expect(calls[1].url).toContain('after=cursor-1');
   });
 
   it('stops paginating when the cursor stops advancing', async () => {
@@ -135,5 +139,31 @@ describe('OpenAiSyncAdapter.fetchMetrics', () => {
     );
 
     expect(rows[0].currency).toBe('EUR');
+  });
+});
+
+describe('OpenAiSyncAdapter time range', () => {
+  it('aligns both bounds to a full hour, as the API demands', async () => {
+    const calls: { url: string }[] = [];
+    const http = {
+      get: (url: string) => {
+        calls.push({ url });
+        return of({ data: { data: [], has_more: false } });
+      },
+    };
+    const adapter = new OpenAiSyncAdapter(http as never);
+    // Deliberately ragged bounds: 13:37:29 and 21:04:11.
+    await adapter.fetchMetrics(
+      { apiKey: 'sk-test' },
+      null,
+      new Date('2026-09-01T13:37:29.000Z'),
+      new Date('2026-09-04T21:04:11.000Z'),
+    );
+
+    const range = JSON.parse(
+      decodeURIComponent(calls[0].url.split('time_ranges%5B%5D=')[1].split('&')[0]),
+    );
+    expect(Number(range.start) % 3600).toBe(0);
+    expect(Number(range.end) % 3600).toBe(0);
   });
 });
