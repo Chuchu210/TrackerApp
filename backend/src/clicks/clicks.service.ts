@@ -150,9 +150,18 @@ export class ClicksService {
 
     // Traffic routing: pick a path (rules) and rotate a variant (offer/lander).
     // With no paths configured this resolves to campaign.destinationUrl (legacy).
+    const routablePaths = (campaign.paths || []).map((path) => ({
+      ...path,
+      variants: (path.variants || []).map((variant) => ({
+        ...variant,
+        offerId: variant.offerId,
+        offerName: variant.offer?.name ?? null,
+      })),
+    }));
+
     const routing = resolveRouting(
       campaign.destinationUrl,
-      (campaign.paths || []) as unknown as RoutablePath[],
+      routablePaths as unknown as RoutablePath[],
       {
         country: geo.countryCode,
         device: device.device,
@@ -188,8 +197,8 @@ export class ClicksService {
         variantId: routing.variantId || null,
         landerId: voluum.landerId || campaign.landerId || null,
         landerName: voluum.landerName || campaign.landerName || null,
-        offerId: voluum.offerId || campaign.offerId || null,
-        offerName: voluum.offerName || campaign.offerName || null,
+        offerId: routing.offerId || voluum.offerId || campaign.offerId || null,
+        offerName: routing.offerName || voluum.offerName || campaign.offerName || null,
         affiliateNetwork: voluum.affiliateNetwork || campaign.affiliateNetwork || null,
         affiliateNetworkId: voluum.affiliateNetworkId || campaign.affiliateNetworkId || null,
         trafficSourceId: voluum.trafficSourceId || campaign.trafficSourceId || null,
@@ -239,6 +248,21 @@ export class ClicksService {
         requestHeaders: visitor.headers as Prisma.InputJsonValue,
       },
     });
+
+    // Record which catalog offer served this click, so the Offers drilldown and
+    // payout resolution have real data. Fire-and-forget: a bookkeeping row must
+    // never fail the redirect.
+    if (routing.offerId) {
+      this.prisma.offerClick
+        .create({
+          data: {
+            clickId,
+            offerId: routing.offerId,
+            campaignId: campaign.id,
+          },
+        })
+        .catch(() => {});
+    }
 
     this.ipEnrichment.enrichClickAsync(clickId, ipAddress, userAgent, acceptLanguage);
 
@@ -323,7 +347,15 @@ export class ClicksService {
       },
       include: {
         trafficSourceProfile: true,
-        paths: { where: { active: true }, include: { variants: { where: { active: true } } } },
+        paths: {
+          where: { active: true },
+          include: {
+            variants: {
+              where: { active: true },
+              include: { offer: { select: { id: true, name: true } } },
+            },
+          },
+        },
       },
     });
 

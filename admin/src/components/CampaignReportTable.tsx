@@ -61,16 +61,45 @@ function FilterFunnel({
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // Anchored with position:fixed rather than absolute: the table lives inside
+  // an overflow-x-auto scroller, which also clips vertically, so an absolute
+  // popover gets cut off on short tables.
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const active = value.trim().length > 0;
+
+  const toggle = () => {
+    setOpen((v) => {
+      const next = !v;
+      if (next && btnRef.current) {
+        const r = btnRef.current.getBoundingClientRect();
+        setCoords({ top: r.bottom + 4, left: r.left });
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    // Reposition would be wrong once the anchor moves, so just dismiss.
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [open]);
 
   return (
     <div className="relative inline-flex">
       <button
+        ref={btnRef}
         type="button"
         aria-label="Filter column"
         onClick={(e) => {
           e.stopPropagation();
-          setOpen((v) => !v);
+          toggle();
         }}
         className={[
           'ml-1 inline-flex h-4 w-4 items-center justify-center rounded text-[10px]',
@@ -81,9 +110,10 @@ function FilterFunnel({
       >
         ▾
       </button>
-      {open ? (
+      {open && coords ? (
         <div
-          className="absolute left-0 top-full z-30 mt-1 w-40 rounded-xl border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+          style={{ top: coords.top, left: coords.left }}
+          className="fixed z-50 w-40 rounded-xl border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
           onClick={(e) => e.stopPropagation()}
         >
           <input

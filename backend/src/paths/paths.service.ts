@@ -15,7 +15,12 @@ export class PathsService {
   listForCampaign(campaignId: string) {
     return this.prisma.campaignPath.findMany({
       where: { campaignId },
-      include: { variants: { orderBy: { createdAt: 'asc' } } },
+      include: {
+        variants: {
+          orderBy: { createdAt: 'asc' },
+          include: { offer: { select: { id: true, name: true } } },
+        },
+      },
       orderBy: { createdAt: 'asc' },
     });
   }
@@ -69,9 +74,11 @@ export class PathsService {
         label: dto.label ?? 'Variant',
         kind: dto.kind ?? undefined,
         destinationUrl: dto.destinationUrl,
+        offerId: dto.offerId || null,
         weight: dto.weight ?? 100,
         active: dto.active ?? true,
       },
+      include: { offer: { select: { id: true, name: true } } },
     });
   }
 
@@ -84,9 +91,11 @@ export class PathsService {
         label: dto.label,
         kind: dto.kind,
         destinationUrl: dto.destinationUrl,
+        offerId: dto.offerId === undefined ? undefined : dto.offerId || null,
         weight: dto.weight,
         active: dto.active,
       },
+      include: { offer: { select: { id: true, name: true } } },
     });
   }
 

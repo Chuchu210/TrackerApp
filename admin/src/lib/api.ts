@@ -753,6 +753,9 @@ export interface PathVariant {
   label: string;
   kind: 'offer' | 'lander';
   destinationUrl: string;
+  /** Catalog offer this variant serves; null means a plain destination URL. */
+  offerId?: string | null;
+  offer?: { id: string; name: string } | null;
   weight: number;
   active: boolean;
   isWinner: boolean;

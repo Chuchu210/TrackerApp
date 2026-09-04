@@ -63,6 +63,11 @@ export class CreateVariantDto {
   @IsUrl({ require_tld: false })
   destinationUrl: string;
 
+  /** Optional catalog offer this variant serves. */
+  @IsOptional()
+  @IsString()
+  offerId?: string | null;
+
   @IsOptional()
   @IsInt()
   @Min(0)
@@ -85,6 +90,11 @@ export class UpdateVariantDto {
   @IsOptional()
   @IsUrl({ require_tld: false })
   destinationUrl?: string;
+
+  /** Optional catalog offer this variant serves; null detaches it. */
+  @IsOptional()
+  @IsString()
+  offerId?: string | null;
 
   @IsOptional()
   @IsInt()

@@ -426,7 +426,10 @@ export default function OverviewPage() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-zinc-200/70 shadow-[var(--shadow-sm)] dark:border-zinc-800/80">
+        {/* No overflow-hidden here: it would clip the toolbar and column
+            picker dropdowns, which are absolutely positioned. The rounded
+            corners are clipped on the table wrapper below instead. */}
+        <div className="rounded-2xl border border-zinc-200/70 shadow-[var(--shadow-sm)] dark:border-zinc-800/80">
           <VoluumReportToolbar
             reportLevel={reportLevel}
             selectedCampaign={selectedCampaign}
@@ -454,20 +457,22 @@ export default function OverviewPage() {
             />
           ) : null}
 
-          {drilldownLoading && onDrilldown ? (
-            <Loading label={`Loading ${activeDimension?.label || 'report'}...`} />
-          ) : (
-            <CampaignReportTable
-              rows={displayRows}
-              eventColumns={displayEventColumns}
-              visibleColumns={visibleColumns}
-              nameColumnLabel={nameColumnLabel}
-              showCampaignMeta={!onDrilldown}
-              selectable={!onDrilldown}
-              selectedId={onDrilldown ? null : selectedRowId}
-              onSelect={handleSelectRow}
-            />
-          )}
+          <div className="overflow-hidden rounded-b-2xl">
+            {drilldownLoading && onDrilldown ? (
+              <Loading label={`Loading ${activeDimension?.label || 'report'}...`} />
+            ) : (
+              <CampaignReportTable
+                rows={displayRows}
+                eventColumns={displayEventColumns}
+                visibleColumns={visibleColumns}
+                nameColumnLabel={nameColumnLabel}
+                showCampaignMeta={!onDrilldown}
+                selectable={!onDrilldown}
+                selectedId={onDrilldown ? null : selectedRowId}
+                onSelect={handleSelectRow}
+              />
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -676,6 +676,10 @@ model PathVariant {
   label          String          @default("Variant")
   kind           PathVariantKind @default(offer)
   destinationUrl String          @map("destination_url")
+  // Optional link to a catalog offer. When set, the click records which offer
+  // served it, so the Offers drilldown and payout resolution have real data.
+  offerId        String?         @map("offer_id")
+  offer          Offer?          @relation(fields: [offerId], references: [id], onDelete: SetNull)
   weight         Int             @default(100)
   active         Boolean         @default(true)
   isWinner       Boolean         @default(false) @map("is_winner")
@@ -683,6 +687,7 @@ model PathVariant {
   updatedAt      DateTime        @updatedAt @map("updated_at")
 
   @@index([pathId, active])
+  @@index([offerId])
   @@map("path_variants")
 }
 
@@ -726,7 +731,8 @@ model Offer {
   createdAt          DateTime          @default(now()) @map("created_at")
   updatedAt          DateTime          @updatedAt @map("updated_at")
 
-  offerClicks OfferClick[]
+  offerClicks  OfferClick[]
+  pathVariants PathVariant[]
 
   @@index([name])
   @@index([updatedAt])

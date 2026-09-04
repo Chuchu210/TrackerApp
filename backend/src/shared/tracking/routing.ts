@@ -22,6 +22,9 @@ export interface RoutableVariant {
   weight: number;
   active: boolean;
   label?: string;
+  /** Set when the variant points at a catalog offer rather than a bare URL. */
+  offerId?: string | null;
+  offerName?: string | null;
 }
 
 export interface RoutablePath {
@@ -38,6 +41,9 @@ export interface RoutingDecision {
   pathId?: string;
   variantId?: string;
   variantLabel?: string;
+  /** Offer that served the click, when the chosen variant references one. */
+  offerId?: string | null;
+  offerName?: string | null;
 }
 
 type Rng = () => number;
@@ -133,5 +139,7 @@ export function resolveRouting(
     pathId: path.id,
     variantId: variant?.id,
     variantLabel: variant?.label,
+    offerId: variant?.offerId ?? null,
+    offerName: variant?.offerName ?? null,
   };
 }
