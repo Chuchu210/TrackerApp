@@ -423,8 +423,12 @@ export class PlatformSyncService {
   }
 
   async syncAll(daysBack = 7) {
+    // Errored connections are retried, not abandoned: syncConnection is what
+    // flips a connection back to active, so filtering them out here left any
+    // transient failure disabling the connection permanently. Only an
+    // explicitly disabled connection is skipped.
     const connections = await this.prisma.platformConnection.findMany({
-      where: { status: PlatformConnectionStatus.active },
+      where: { status: { not: PlatformConnectionStatus.disabled } },
     });
     const to = new Date();
     const from = new Date(to.getTime() - daysBack * 24 * 60 * 60 * 1000);
