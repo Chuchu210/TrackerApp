@@ -317,18 +317,18 @@ export class PlatformSyncService {
     const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
     const extNorm = norm(externalName);
 
-    const extLower = externalName.toLowerCase();
+    // Exact signals only. Substring matching on the slug used to be the final
+    // fallback and it silently misattributed spend: a campaign slugged "auto"
+    // matched every "PPC - Auto Insurance ..." campaign on the ad account, so
+    // their cost landed on the wrong tracker campaign. Attributing spend to the
+    // wrong campaign is worse than leaving it unmapped, because the number
+    // still looks plausible. Anything ambiguous is reported as unmatched and
+    // mapped explicitly by the user.
     return (
       campaigns.find((c) => c.externalId === externalId) ||
       campaigns.find((c) => c.slug === externalId) ||
       campaigns.find((c) => norm(c.name) === extNorm) ||
-      campaigns.find((c) => norm(c.slug) === extNorm) ||
-      campaigns.find((c) => extNorm.includes(norm(c.slug)) || norm(c.slug).includes(extNorm)) ||
-      campaigns.find(
-        (c) =>
-          c.slug.length >= 3 &&
-          (extLower.includes(c.slug.toLowerCase()) || extNorm.includes(norm(c.slug))),
-      )
+      campaigns.find((c) => norm(c.slug) === extNorm)
     );
   }
 
