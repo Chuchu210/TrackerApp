@@ -676,6 +676,38 @@ export interface AppSettings {
   fraudVelocityMaxClicks: number | null;
 }
 
+export interface IncomingPostback {
+  id: string;
+  clickId: string;
+  eventType: string;
+  status: string;
+  revenue: number;
+  currency?: string | null;
+  transactionId?: string | null;
+  incomingPostbackIp?: string | null;
+  incomingPostbackUrl?: string | null;
+  postbackParam1?: string | null;
+  postbackParam2?: string | null;
+  postbackParam3?: string | null;
+  createdAt: string;
+  campaign: { id: string; name: string; slug: string };
+}
+
+export interface IncomingPostbackSummaryRow {
+  campaignId: string;
+  campaignName: string;
+  campaignSlug: string;
+  total: number;
+  revenue: number;
+  failed: number;
+  byEventType: Record<string, number>;
+}
+
+export interface IncomingPostbackSummary {
+  items: IncomingPostbackSummaryRow[];
+  totals: { total: number; revenue: number; failed: number };
+}
+
 export interface AffiliateNetwork {
   id: string;
   name: string;
@@ -1127,6 +1159,20 @@ export const trackerApi = {
     api<{ pathsEvaluated: number; winnersPicked: number }>(`/api/paths/auto-winner/run`, {
       method: 'POST',
     }),
+
+  // Incoming S2S postbacks (what affiliate networks sent us).
+  getIncomingPostbacks: (params?: Record<string, string>) => {
+    const qs = params ? `?${new URLSearchParams(params)}` : '';
+    return api<{ items: IncomingPostback[]; total: number }>(
+      `/api/analytics/incoming-postbacks${qs}`,
+    );
+  },
+  getIncomingPostbackSummary: (params?: Record<string, string>) => {
+    const qs = params ? `?${new URLSearchParams(params)}` : '';
+    return api<IncomingPostbackSummary>(
+      `/api/analytics/incoming-postbacks/summary${qs}`,
+    );
+  },
 
   // Offer catalog + affiliate networks.
   getOffers: (params?: Record<string, string>) => {

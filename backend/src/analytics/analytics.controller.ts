@@ -7,6 +7,7 @@ import { CreativeAnalyticsService } from './creative-analytics.service';
 import { PlacementAnalyticsService } from './placement-analytics.service';
 import { ProfitabilityAnalyticsService } from './profitability-analytics.service';
 import { DigestService } from './digest.service';
+import { IncomingPostbacksService } from './incoming-postbacks.service';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import type { VisitAnalyticsFilters, VisitBreakdownDimension } from './visit-filters';
 
@@ -21,7 +22,39 @@ export class AnalyticsController {
     private readonly placementAnalytics: PlacementAnalyticsService,
     private readonly profitabilityAnalytics: ProfitabilityAnalyticsService,
     private readonly digest: DigestService,
+    private readonly incomingPostbacks: IncomingPostbacksService,
   ) {}
+
+  /** S2S postbacks affiliate networks sent us, most recent first. */
+  @Get('incoming-postbacks')
+  listIncomingPostbacks(
+    @Query('campaignId') campaignId?: string,
+    @Query('eventType') eventType?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.incomingPostbacks.list({
+      campaignId,
+      eventType,
+      from,
+      to,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      offset: offset ? parseInt(offset, 10) : undefined,
+    });
+  }
+
+  /** Per-campaign rollup of the same data, with an event-type breakdown. */
+  @Get('incoming-postbacks/summary')
+  incomingPostbacksSummary(
+    @Query('campaignId') campaignId?: string,
+    @Query('eventType') eventType?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.incomingPostbacks.summary({ campaignId, eventType, from, to });
+  }
 
   @Get('overview')
   async overview(

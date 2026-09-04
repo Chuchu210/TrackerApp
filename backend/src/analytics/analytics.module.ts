@@ -7,6 +7,7 @@ import { CreativeAnalyticsService } from './creative-analytics.service';
 import { PlacementAnalyticsService } from './placement-analytics.service';
 import { ProfitabilityAnalyticsService } from './profitability-analytics.service';
 import { DigestService } from './digest.service';
+import { IncomingPostbacksService } from './incoming-postbacks.service';
 import { ConversionEventTypesModule } from '../conversion-event-types/conversion-event-types.module';
 
 @Module({
@@ -14,6 +15,7 @@ import { ConversionEventTypesModule } from '../conversion-event-types/conversion
   controllers: [AnalyticsController],
   providers: [
     AnalyticsService,
+    IncomingPostbacksService,
     CampaignReportService,
     FunnelAnalyticsService,
     CreativeAnalyticsService,
@@ -23,6 +25,7 @@ import { ConversionEventTypesModule } from '../conversion-event-types/conversion
   ],
   exports: [
     AnalyticsService,
+    IncomingPostbacksService,
     CampaignReportService,
     FunnelAnalyticsService,
     CreativeAnalyticsService,
