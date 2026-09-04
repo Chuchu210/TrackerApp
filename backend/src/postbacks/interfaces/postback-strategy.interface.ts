@@ -16,7 +16,13 @@ export type CampaignPostbackContext = {
     postbackDefaults: unknown;
     paramMappings?: ParamMapping[];
   } | null;
-  campaign?: { id: string; name: string; externalId?: string | null };
+  campaign?: {
+    id: string;
+    name: string;
+    externalId?: string | null;
+    /** Landing page URL — used as `source_url` for OpenAI Ads web events. */
+    destinationUrl?: string | null;
+  };
 };
 
 export interface PostbackStrategy {

@@ -17,6 +17,7 @@ import {
   extractVoluumFields,
 } from '../shared/tracking/voluum-fields';
 import { detectBot } from '../shared/tracking/bot-detector';
+import { extractOpenAiAttribution } from '../shared/tracking/openai-attribution';
 import {
   evaluateClickVelocity,
   mergeBotSignals,
@@ -112,6 +113,7 @@ export class ClicksService {
     const mappings = this.getCampaignParamMappings(campaign);
     const params = getTrackingParamsFromQuery(query, null, mappings);
     const rawParams = extractRawParams(query);
+    const openAi = extractOpenAiAttribution(rawParams);
     const voluum = extractVoluumFields(query);
     const customVars = applyNativeParamFallbacks(voluum.customVariables, {
       adId: params.ad_id,
@@ -172,6 +174,8 @@ export class ClicksService {
         externalClickId: params.external_click_id || null,
         gclid: params.gclid || null,
         fbclid: params.fbclid || null,
+        oppref: openAi.oppref,
+        obref: openAi.obref,
         adId: params.ad_id || null,
         adTitle: params.ad_title || null,
         campaignExternalId: params.campaign_external_id || null,

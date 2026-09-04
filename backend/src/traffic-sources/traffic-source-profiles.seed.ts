@@ -21,6 +21,14 @@ const FACEBOOK_MAPPINGS: ParamMapping[] = [
   { internalField: 'utm_term', displayLabel: 'UTM Term', externalKeys: ['utm_term'], showInReports: false, priority: 6 },
 ];
 
+const OPENAI_MAPPINGS: ParamMapping[] = [
+  { internalField: 'oppref', displayLabel: 'OpenAI Click Ref', externalKeys: ['oppref', 'oai_oppref', 'openai_oppref'], showInReports: true, priority: 1 },
+  { internalField: 'utm_source', displayLabel: 'UTM Source', externalKeys: ['utm_source'], showInReports: true, priority: 2 },
+  { internalField: 'utm_medium', displayLabel: 'UTM Medium', externalKeys: ['utm_medium'], showInReports: false, priority: 3 },
+  { internalField: 'utm_campaign', displayLabel: 'UTM Campaign', externalKeys: ['utm_campaign'], showInReports: true, priority: 4 },
+  { internalField: 'utm_content', displayLabel: 'UTM Content', externalKeys: ['utm_content'], showInReports: true, priority: 5 },
+];
+
 const GOOGLE_MAPPINGS: ParamMapping[] = [
   { internalField: 'gclid', displayLabel: 'GCLID', externalKeys: ['gclid'], showInReports: true, priority: 1 },
   { internalField: 'utm_source', displayLabel: 'UTM Source', externalKeys: ['utm_source'], showInReports: true, priority: 2 },
@@ -238,6 +246,28 @@ export const SYSTEM_TRAFFIC_SOURCE_PROFILES: SeedProfile[] = [
     },
     setupNote:
       'Put the Direct Ad URL in TikTok (TikTok fills ttclid). Add the LP script to your landing page.',
+    isSystem: true,
+  },
+  {
+    slug: 'openai',
+    name: 'OpenAI Ads (ChatGPT)',
+    trackingModeDefault: TrackingMode.direct,
+    clickUrlTemplate: null,
+    directAdUrlTemplate:
+      '{destinationUrl}?utm_source=openai&utm_medium=cpc&utm_campaign={campaignName}',
+    paramMappings: OPENAI_MAPPINGS,
+    conversionMethod: ConversionMethod.openai_capi,
+    postbackDefaults: {
+      mediagoEnabled: false,
+      facebookEnabled: false,
+      googleEnabled: false,
+      openaiEnabled: true,
+      requiredMetadata: ['email'],
+      postbackUrlTemplate:
+        'POST https://bzr.openai.com/v1/events?pid={pixelId} (Conversions API — configure pixel ID + API key on campaign)',
+    },
+    setupNote:
+      "Put the Direct Ad URL in ChatGPT Ads Manager. Add oppref to the campaign's tracking template so it lands on the LP, then add the LP script to your landing page. Provision the Pixel ID and Conversions API key from the Conversions tab in Ads Manager.",
     isSystem: true,
   },
   {

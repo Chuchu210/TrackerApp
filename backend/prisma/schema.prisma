@@ -69,6 +69,7 @@ enum PostbackNetwork {
   facebook
   google
   outbrain
+  openai
 }
 
 enum ConversionMethod {
@@ -76,6 +77,7 @@ enum ConversionMethod {
   facebook_capi
   google_offline
   outbrain_s2s
+  openai_capi
   generic_postback
   none
 }
@@ -234,6 +236,11 @@ model PostbackConfig {
   googlePostbackUrl     String? @map("google_postback_url")
   googleEnabled         Boolean @default(false) @map("google_enabled")
 
+  // OpenAI Ads Conversions API (https://bzr.openai.com/v1/events?pid=<pixel>)
+  openaiPixelId String? @map("openai_pixel_id")
+  openaiApiKey  String? @map("openai_api_key")
+  openaiEnabled Boolean @default(false) @map("openai_enabled")
+
   // Shared secret an affiliate network must present (?secret=/?key=/?token=) on
   // incoming S2S postbacks. When null, only the global POSTBACK_IP_ALLOWLIST gates.
   postbackSecret String? @map("postback_secret")
@@ -255,6 +262,11 @@ model Click {
   externalClickId String? @map("external_click_id")
   gclid           String?
   fbclid          String?
+  // OpenAI Ads attribution: `oppref` arrives on the landing-page URL and must be
+  // stored, because (unlike the pixel) the Conversions API does not capture it
+  // for us. `obref` is the browser reference read from the __obref cookie.
+  oppref          String?
+  obref           String?
 
   // Mediago / native ad params (from Voluum-style URLs)
   adId               String? @map("ad_id")

@@ -119,6 +119,10 @@ export interface PostbackConfig {
   googleConversionLabel?: string;
   googlePostbackUrl?: string;
   googleEnabled: boolean;
+  /** OpenAI Ads Conversions API — pixel ID + key from Ads Manager > Conversions. */
+  openaiPixelId?: string;
+  openaiApiKey?: string;
+  openaiEnabled: boolean;
   /** Shared secret an affiliate network must present on incoming S2S postbacks. */
   postbackSecret?: string;
 }

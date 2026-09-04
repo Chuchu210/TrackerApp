@@ -50,11 +50,22 @@ export class TrackerScriptService {
     g.setItem("tk-vid", vid);
   }
 
+  function readCookie(name) {
+    var m = d.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+    return m ? decodeURIComponent(m[2]) : null;
+  }
+
   function urlParams() {
     var p = {};
     new URLSearchParams(w.location.search).forEach(function (v, key) {
       p[key.toLowerCase()] = v;
     });
+    // OpenAI Ads browser reference: the Conversions API needs it replayed with
+    // the conversion, so forward it with the visit if the pixel set it.
+    if (!p.obref) {
+      var ob = readCookie("__obref");
+      if (ob) p.obref = ob;
+    }
     return p;
   }
 

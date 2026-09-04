@@ -221,5 +221,17 @@ export class UpdatePostbackConfigDto {
 
   @IsOptional()
   @IsString()
+  openaiPixelId?: string;
+
+  @IsOptional()
+  @IsString()
+  openaiApiKey?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  openaiEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
   postbackSecret?: string;
 }

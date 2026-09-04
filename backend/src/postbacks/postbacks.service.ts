@@ -5,6 +5,7 @@ import { MediagoStrategy } from './strategies/mediago.strategy';
 import { FacebookStrategy } from './strategies/facebook.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { OutbrainStrategy } from './strategies/outbrain.strategy';
+import { OpenAiStrategy } from './strategies/openai.strategy';
 import { PostbackStrategy } from './interfaces/postback-strategy.interface';
 
 @Injectable()
@@ -18,8 +19,9 @@ export class PostbacksService {
     facebook: FacebookStrategy,
     google: GoogleStrategy,
     outbrain: OutbrainStrategy,
+    openai: OpenAiStrategy,
   ) {
-    this.strategies = [mediago, facebook, google, outbrain];
+    this.strategies = [mediago, facebook, google, outbrain, openai];
   }
 
   async processConversion(conversionId: string): Promise<void> {
@@ -55,6 +57,7 @@ export class PostbacksService {
         id: conversion.campaign.id,
         name: conversion.campaign.name,
         externalId: conversion.campaign.externalId,
+        destinationUrl: conversion.campaign.destinationUrl,
       },
     };
 

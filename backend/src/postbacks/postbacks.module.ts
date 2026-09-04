@@ -5,6 +5,7 @@ import { MediagoStrategy } from './strategies/mediago.strategy';
 import { FacebookStrategy } from './strategies/facebook.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { OutbrainStrategy } from './strategies/outbrain.strategy';
+import { OpenAiStrategy } from './strategies/openai.strategy';
 
 @Module({
   imports: [HttpModule],
@@ -14,6 +15,7 @@ import { OutbrainStrategy } from './strategies/outbrain.strategy';
     FacebookStrategy,
     GoogleStrategy,
     OutbrainStrategy,
+    OpenAiStrategy,
   ],
   exports: [PostbacksService],
 })
