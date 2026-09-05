@@ -47,13 +47,22 @@ export class AutoWinnerService {
       const stats: VariantStats[] = [];
       for (const variant of path.variants) {
         const [visits, conversions] = await Promise.all([
+          // Test rows are excluded on both sides: this counter decides which
+          // variant every future visitor is sent to, so a handful of rehearsal
+          // conversions must never be what picks the winner.
           this.prisma.click.count({
-            where: { variantId: variant.id, isBot: false, createdAt: { gte: since } },
+            where: {
+              variantId: variant.id,
+              isBot: false,
+              isTest: false,
+              createdAt: { gte: since },
+            },
           }),
           this.prisma.conversion.count({
             where: {
               click: { variantId: variant.id },
               createdAt: { gte: since },
+              isTest: false,
               ...(slugs.length > 0 ? { eventType: { in: slugs } } : {}),
             },
           }),

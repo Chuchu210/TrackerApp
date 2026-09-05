@@ -15,6 +15,7 @@ export interface EffectiveSettings {
   reportTimezone: string;
   fraudVelocityWindowSeconds: number;
   fraudVelocityMaxClicks: number;
+  testMode: boolean;
 }
 
 export interface StoredSettings {
@@ -27,6 +28,7 @@ export interface StoredSettings {
   reportTimezone: string | null;
   fraudVelocityWindowSeconds: number | null;
   fraudVelocityMaxClicks: number | null;
+  testMode: boolean | null;
 }
 
 /**
@@ -66,6 +68,10 @@ export class SettingsService {
         row?.fraudVelocityWindowSeconds ?? Number(env('FRAUD_VELOCITY_WINDOW_SECONDS') ?? 60),
       fraudVelocityMaxClicks:
         row?.fraudVelocityMaxClicks ?? Number(env('FRAUD_VELOCITY_MAX_CLICKS') ?? 20),
+      // Deliberately not env-configurable: test mode is an operator switch that
+      // must be visible and reversible from the UI, never a deploy-time state
+      // someone can forget a server is running in.
+      testMode: row?.testMode ?? false,
     };
 
     this.cache = { value, expiresAt: Date.now() + CACHE_TTL_MS };
@@ -90,7 +96,19 @@ export class SettingsService {
       reportTimezone: row?.reportTimezone ?? null,
       fraudVelocityWindowSeconds: row?.fraudVelocityWindowSeconds ?? null,
       fraudVelocityMaxClicks: row?.fraudVelocityMaxClicks ?? null,
+      testMode: row?.testMode ?? null,
     };
+  }
+
+  /** Hot path: is ingestion currently stamping rows as test? */
+  async isTestMode(): Promise<boolean> {
+    const { testMode } = await this.getEffective();
+    return testMode;
+  }
+
+  async setTestMode(enabled: boolean): Promise<{ enabled: boolean }> {
+    await this.update({ testMode: enabled });
+    return { enabled };
   }
 
   async update(patch: Partial<StoredSettings>): Promise<StoredSettings> {

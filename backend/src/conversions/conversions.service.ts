@@ -161,6 +161,10 @@ export class ConversionsService {
         postbackParam3: dto.postbackParam3 || context?.postbackParam3 || null,
         postbackParam4: dto.postbackParam4 || context?.postbackParam4 || null,
         postbackParam5: dto.postbackParam5 || context?.postbackParam5 || null,
+        // A test click can only ever produce test conversions; and firing a
+        // conversion while test mode is on marks it test even against a real
+        // click, so rehearsing a postback never adds a lead to the reports.
+        isTest: click.isTest || settings.testMode,
       },
     });
 
@@ -214,13 +218,17 @@ export class ConversionsService {
     eventType?: string;
     from?: string;
     to?: string;
+    isTest?: boolean;
     limit?: number;
     offset?: number;
   }) {
+    // Like the click log, this list is ground truth rather than a report, so
+    // test rows stay visible and carry `isTest` for the UI to mark.
     const where: Record<string, unknown> = {};
 
     if (filters.campaignId) where.campaignId = filters.campaignId;
     if (filters.status) where.status = filters.status;
+    if (filters.isTest !== undefined) where.isTest = filters.isTest;
     if (filters.eventType) {
       const slugs = filters.eventType.includes(',')
         ? filters.eventType.split(',').map((s) => normalizeEventType(s.trim()))

@@ -22,6 +22,7 @@ export async function getVisitStats(
   from?: string,
   to?: string,
   excludeBots?: boolean,
+  includeTest?: boolean,
 ): Promise<VisitStats> {
   const { fromDate, toDate } = resolveDateRange(from, to);
 
@@ -31,6 +32,9 @@ export async function getVisitStats(
   ];
   if (campaignId) conditions.push(Prisma.sql`campaign_id = ${campaignId}`);
   if (excludeBots) conditions.push(Prisma.sql`is_bot = false`);
+  // Default-deny, like every other report path: only an explicit opt-in shows
+  // rows recorded while test mode was on.
+  if (!includeTest) conditions.push(Prisma.sql`is_test = false`);
 
   const whereClause = Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`;
 

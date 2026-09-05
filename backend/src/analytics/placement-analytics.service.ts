@@ -58,6 +58,9 @@ export class PlacementAnalyticsService {
     const convWhere = {
       eventType: { in: event.slugs },
       click: { is: clickWhere },
+      // Not implied by the click filter: a conversion fired while test mode was
+      // on is a test row even when the click it attaches to is real.
+      isTest: false,
       ...(countMode === 'sent' ? { status: 'sent' as const } : {}),
     };
 

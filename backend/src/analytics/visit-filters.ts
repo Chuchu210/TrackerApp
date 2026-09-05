@@ -1,4 +1,7 @@
 import { Prisma } from '@prisma/client';
+import { excludeTestRows } from '../shared/tracking/test-mode';
+
+export { excludeTestRows, excludeTestRowsSql } from '../shared/tracking/test-mode';
 
 export type VisitAnalyticsFilters = {
   campaignId?: string;
@@ -14,10 +17,16 @@ export type VisitAnalyticsFilters = {
   isBot?: boolean;
   isNewVisitor?: boolean;
   excludeBots?: boolean;
+  /**
+   * Opt in to test rows. Absent or false means reports read real traffic only,
+   * which is the whole point of test mode — the safe state must be the one you
+   * get by forgetting to pass anything.
+   */
+  includeTest?: boolean;
 };
 
 export function buildClickWhere(filters: VisitAnalyticsFilters): Prisma.ClickWhereInput {
-  const where: Prisma.ClickWhereInput = {};
+  const where: Prisma.ClickWhereInput = { ...excludeTestRows(filters) };
 
   if (filters.campaignId) where.campaignId = filters.campaignId;
   if (filters.publisher) {

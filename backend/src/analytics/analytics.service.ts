@@ -5,6 +5,7 @@ import { ConversionEventTypesService } from '../conversion-event-types/conversio
 import { getVisitStats } from './visit-stats';
 import {
   buildClickWhere,
+  excludeTestRows,
   type VisitAnalyticsFilters,
   type VisitBreakdownDimension,
 } from './visit-filters';
@@ -29,22 +30,26 @@ export class AnalyticsService {
     from?: string,
     to?: string,
     excludeBots?: boolean,
+    includeTest?: boolean,
   ) {
     const { fromDate, toDate } = this.resolveDateRange(from, to);
     const clickFilter: Prisma.ClickWhereInput = {
       ...(campaignId ? { campaignId } : {}),
       createdAt: { gte: fromDate, lte: toDate },
       ...(excludeBots ? { isBot: false } : {}),
+      ...excludeTestRows({ includeTest }),
     };
     const convWhere: Prisma.ConversionWhereInput = {
       ...(campaignId ? { campaignId } : {}),
       createdAt: { gte: fromDate, lte: toDate },
       ...(excludeBots ? { click: { is: clickFilter } } : {}),
     };
-    const convCountWhere = await this.eventTypes.applyConversionCountFilter(convWhere);
+    const convCountWhere = await this.eventTypes.applyConversionCountFilter(convWhere, {
+      includeTest,
+    });
 
     const [visitStats, conversions, sentConversions] = await Promise.all([
-      getVisitStats(this.prisma, campaignId, from, to, excludeBots),
+      getVisitStats(this.prisma, campaignId, from, to, excludeBots, includeTest),
       this.prisma.conversion.count({ where: convCountWhere }),
       this.prisma.conversion.count({ where: { ...convCountWhere, status: 'sent' } }),
     ]);
@@ -92,6 +97,7 @@ export class AnalyticsService {
     const clickWhere: Prisma.ClickWhereInput = {
       ...(campaignId ? { campaignId } : {}),
       createdAt: { gte: fromDate, lte: toDate },
+      isTest: false,
     };
     const conversionSlugs = await this.eventTypes.getConversionCountSlugs();
 
@@ -104,6 +110,9 @@ export class AnalyticsService {
     const clickConditions: Prisma.Sql[] = [
       Prisma.sql`c.created_at >= ${fromDate}`,
       Prisma.sql`c.created_at <= ${toDate}`,
+      // Mirrors `clickWhere` above: the two halves of this breakdown must
+      // agree on which rows exist, or the CR denominators go wrong.
+      Prisma.sql`c.is_test = false`,
     ];
     if (campaignId) clickConditions.push(Prisma.sql`c.campaign_id = ${campaignId}`);
 

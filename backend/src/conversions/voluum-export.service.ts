@@ -20,7 +20,9 @@ export class VoluumExportService {
     from?: string;
     to?: string;
   }): Promise<string> {
-    const where: Prisma.ConversionWhereInput = {};
+    // A CSV export leaves the building — test rows must never travel with it,
+    // whatever the log screens choose to display.
+    const where: Prisma.ConversionWhereInput = { isTest: false };
     if (filters.campaignId) where.campaignId = filters.campaignId;
     if (filters.from || filters.to) {
       where.createdAt = {

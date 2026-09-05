@@ -68,6 +68,7 @@ export class FunnelAnalyticsService {
       ...(campaignId ? { campaignId } : {}),
       eventType: { in: slugs },
       createdAt: { gte: fromDate, lte: toDate },
+      isTest: false,
     };
   }
 
@@ -90,6 +91,7 @@ export class FunnelAnalyticsService {
       where: {
         ...(campaignId ? { campaignId } : {}),
         createdAt: { gte: fromDate, lte: toDate },
+        isTest: false,
       },
       _count: { _all: true },
     });

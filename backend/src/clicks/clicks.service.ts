@@ -147,6 +147,9 @@ export class ClicksService {
     });
     const velocity = await this.evaluateVelocity(ipAddress);
     const bot = mergeBotSignals(baseBot, velocity);
+    // Read once and stamp on the row: a click taken during a test session stays
+    // a test click even after the switch is turned back off.
+    const isTest = await this.settings.isTestMode();
 
     // Traffic routing: pick a path (rules) and rotate a variant (offer/lander).
     // With no paths configured this resolves to campaign.destinationUrl (legacy).
@@ -240,6 +243,7 @@ export class ClicksService {
         isBot: bot.isBot,
         botScore: bot.score,
         botReasons: bot.reasons as Prisma.InputJsonValue,
+        isTest,
         ipAddress: ipAddress || null,
         userAgent: userAgent || null,
         acceptLanguage: acceptLanguage || null,
@@ -379,10 +383,15 @@ export class ClicksService {
     contentName?: string;
     isBot?: boolean;
     isNewVisitor?: boolean;
+    isTest?: boolean;
     converted?: boolean;
     limit?: number;
     offset?: number;
   }) {
+    // Unlike the reports, the click log shows test rows by default: this is the
+    // screen you open right after firing a test click to confirm it landed, and
+    // the row carries `isTest` so the UI can mark it. Pass isTest to isolate
+    // either side.
     const where: Prisma.ClickWhereInput = {};
 
     if (filters.campaignId) where.campaignId = filters.campaignId;
@@ -397,6 +406,7 @@ export class ClicksService {
     }
     if (filters.isBot !== undefined) where.isBot = filters.isBot;
     if (filters.isNewVisitor !== undefined) where.isNewVisitor = filters.isNewVisitor;
+    if (filters.isTest !== undefined) where.isTest = filters.isTest;
 
     if (filters.from || filters.to) {
       where.createdAt = {

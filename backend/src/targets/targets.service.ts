@@ -71,6 +71,7 @@ export class TargetsService {
       where: {
         campaignId,
         createdAt: { gte: dayStart, lte: dayEnd },
+        isTest: false,
       },
       _count: { _all: true },
       _sum: { revenue: true },

@@ -178,7 +178,7 @@ export class CampaignsService {
       };
     } catch {
       const [visits, conversions, sentConversions] = await Promise.all([
-        this.prisma.click.count({ where: { campaignId } }),
+        this.prisma.click.count({ where: { campaignId, isTest: false } }),
         this.prisma.conversion.count({ where: convCountWhere }),
         this.prisma.conversion.count({
           where: { ...convCountWhere, status: 'sent' },

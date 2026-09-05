@@ -107,6 +107,10 @@ export class CampaignReportService {
       ...(campaignId ? { campaignId } : {}),
       createdAt: { gte: fromDate, lte: toDate },
       ...(excludeBots ? { isBot: false } : {}),
+      // Test rows never reach a report. This is the campaign table everyone
+      // reads spend and ROI off, so it is the last place a rehearsal should
+      // show up.
+      isTest: false,
     };
   }
 
@@ -121,11 +125,13 @@ export class CampaignReportService {
       ...(campaignId ? { campaignId } : {}),
       createdAt: { gte: fromDate, lte: toDate },
       ...(excludeBots ? { isBot: false } : {}),
+      isTest: false,
     };
     return {
       ...(campaignId ? { campaignId } : {}),
       createdAt: { gte: fromDate, lte: toDate },
       ...(excludeBots ? { click: { is: clickFilter } } : {}),
+      isTest: false,
     };
   }
 
@@ -307,13 +313,18 @@ export class CampaignReportService {
         ? Prisma.sql`date_trunc(${truncUnit}, cv.created_at)`
         : Prisma.sql`date_trunc(${truncUnit}, cv.created_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})`;
 
+    // The Prisma-side helpers (clickWhere/convWhere) drop test rows; these raw
+    // timeseries queries bypass them entirely, so the same rule is restated
+    // here — otherwise the chart and the table above it disagree.
     const clickConditions: Prisma.Sql[] = [
       Prisma.sql`created_at >= ${fromDate}`,
       Prisma.sql`created_at <= ${toDate}`,
+      Prisma.sql`is_test = false`,
     ];
     const convConditions: Prisma.Sql[] = [
       Prisma.sql`cv.created_at >= ${fromDate}`,
       Prisma.sql`cv.created_at <= ${toDate}`,
+      Prisma.sql`cv.is_test = false`,
     ];
     const spendConditions: Prisma.Sql[] = [
       Prisma.sql`date >= ${fromDate}`,

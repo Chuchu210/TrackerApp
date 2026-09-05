@@ -27,6 +27,11 @@ model AppSettings {
   fraudVelocityWindowSeconds Int? @map("fraud_velocity_window_seconds")
   fraudVelocityMaxClicks     Int? @map("fraud_velocity_max_clicks")
 
+  // While on, every click and conversion is stamped `isTest` and stays out of
+  // reports, so the pipeline (routing, postbacks, CAPI) can be exercised
+  // end-to-end without moving a single number a human reads.
+  testMode Boolean? @map("test_mode")
+
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("app_settings")
@@ -354,6 +359,10 @@ model Click {
   botScore   Int     @default(0) @map("bot_score")
   botReasons Json?   @map("bot_reasons")
 
+  // Stamped when the click was taken while global test mode was on. Reports
+  // exclude these by default — see excludeTestRows() in visit-filters.
+  isTest Boolean @default(false) @map("is_test")
+
   ipAddress      String? @map("ip_address")
   userAgent      String? @map("user_agent")
   acceptLanguage String? @map("accept_language")
@@ -380,6 +389,7 @@ model Click {
   @@index([device])
   @@index([countryCode])
   @@index([isBot])
+  @@index([isTest])
   @@map("clicks")
 }
 
@@ -415,6 +425,11 @@ model Conversion {
   postbackAttempts  Int       @default(0) @map("postback_attempts")
   lastPostbackAt    DateTime? @map("last_postback_at")
 
+  // Inherited from the click, so a conversion can never be counted as real
+  // when the click that produced it was a test — and stays consistent even if
+  // test mode is switched off between the click and its conversion.
+  isTest Boolean @default(false) @map("is_test")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -423,6 +438,7 @@ model Conversion {
   @@unique([clickId, eventType])
   @@index([campaignId, createdAt])
   @@index([status, lastPostbackAt])
+  @@index([isTest])
   @@map("conversions")
 }
 

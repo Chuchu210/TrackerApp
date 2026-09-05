@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DEFAULT_CONVERSION_EVENT_TYPES } from './conversion-event-types.seed';
 import { CreateConversionEventTypeDto, UpdateConversionEventTypeDto } from './dto/conversion-event-type.dto';
 import { normalizeEventType } from '../common/utils/normalize-event-type';
+import { excludeTestRows, type TestModeFilter } from '../shared/tracking/test-mode';
 
 const NO_CONVERSION_SLUG = '__no_conversion_slugs__';
 
@@ -67,11 +68,19 @@ export class ConversionEventTypesService implements OnModuleInit {
     return slugs;
   }
 
+  /**
+   * Every "how many conversions" query in the app goes through here, which
+   * makes it the right place to default test rows out: a caller that says
+   * nothing gets real conversions only, and one that means to see test data
+   * passes `includeTest` (or sets `isTest` in `where`, which wins).
+   */
   async applyConversionCountFilter(
     where: Prisma.ConversionWhereInput = {},
+    options: TestModeFilter = {},
   ): Promise<Prisma.ConversionWhereInput> {
     const slugs = await this.getConversionCountSlugs();
     return {
+      ...excludeTestRows(options),
       ...where,
       eventType: slugs.length > 0 ? { in: slugs } : { in: [NO_CONVERSION_SLUG] },
     };

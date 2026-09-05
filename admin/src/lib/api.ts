@@ -186,6 +186,8 @@ export interface Click {
   isBot?: boolean;
   botScore?: number;
   botReasons?: string[];
+  /** Recorded while global test mode was on; kept out of every report. */
+  isTest?: boolean;
   acceptLanguage?: string;
   requestHeaders?: Record<string, string>;
   isLocalIp?: boolean;
@@ -210,6 +212,8 @@ export interface Conversion {
   transactionId?: string;
   status: string;
   createdAt: string;
+  /** Recorded while global test mode was on; kept out of every report. */
+  isTest?: boolean;
   campaign: { name: string; slug: string; externalId?: string };
   click?: Click;
   postbackLogs: PostbackLog[];
@@ -674,6 +678,7 @@ export interface AppSettings {
   reportTimezone: string | null;
   fraudVelocityWindowSeconds: number | null;
   fraudVelocityMaxClicks: number | null;
+  testMode: boolean | null;
 }
 
 export interface IncomingPostback {
@@ -1253,4 +1258,14 @@ export const trackerApi = {
   getSettings: () => api<AppSettings>('/api/settings'),
   updateSettings: (data: Partial<AppSettings>) =>
     api<AppSettings>('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
+
+  // Test mode has its own pair of routes so the banner mounted on every page
+  // never has to pull the full settings payload (which carries the Telegram
+  // bot token) just to render a switch.
+  getTestMode: () => api<{ enabled: boolean }>('/api/settings/test-mode'),
+  setTestMode: (enabled: boolean) =>
+    api<{ enabled: boolean }>('/api/settings/test-mode', {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
+    }),
 };

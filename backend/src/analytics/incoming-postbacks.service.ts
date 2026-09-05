@@ -26,6 +26,7 @@ export class IncomingPostbacksService {
     const where: Prisma.ConversionWhereInput = {
       // Only conversions that actually arrived over an incoming postback.
       incomingPostbackUrl: { not: null },
+      isTest: false,
     };
     if (filters.campaignId) where.campaignId = filters.campaignId;
     if (filters.eventType) where.eventType = filters.eventType;

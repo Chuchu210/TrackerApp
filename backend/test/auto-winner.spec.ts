@@ -3,9 +3,18 @@ import {
   parseAutoWinnerConfig,
   DEFAULT_AUTO_WINNER_CONFIG,
   twoProportionZ,
+  type AutoWinnerConfig,
 } from '../src/shared/tracking/auto-winner';
 
-const cfg = { minVisitsPerVariant: 200, minTotalVisits: 500, minMarginPct: 20 };
+// Spread the defaults so adding a gate to AutoWinnerConfig cannot silently
+// leave this fixture behind (it did once: the significance gates were added and
+// these objects kept typechecking only because jest does not run tsc).
+const cfg: AutoWinnerConfig = {
+  ...DEFAULT_AUTO_WINNER_CONFIG,
+  minVisitsPerVariant: 200,
+  minTotalVisits: 500,
+  minMarginPct: 20,
+};
 
 describe('computeWinner', () => {
   it('returns no winner with fewer than two variants that have traffic', () => {

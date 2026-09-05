@@ -5,6 +5,7 @@ import { AppShell } from '@/components/AppShell';
 import { ChunkReloadGuard } from '@/components/ChunkReloadGuard';
 import { Sidebar } from '@/components/Sidebar';
 import { SidebarProvider } from '@/components/SidebarContext';
+import { TestModeBanner } from '@/components/TestModeBanner';
 import { ToastProvider } from '@/components/Toast';
 import { auth } from '@/auth';
 
@@ -51,7 +52,10 @@ export default async function RootLayout({
           <ToastProvider>
             <Sidebar userEmail={session?.user?.email} />
             <AppShell>
-              <main className="px-4 sm:px-6 lg:px-8 py-6 lg:py-8 max-w-[1400px]">{children}</main>
+              <main className="px-4 sm:px-6 lg:px-8 py-6 lg:py-8 max-w-[1400px]">
+                <TestModeBanner />
+                {children}
+              </main>
             </AppShell>
           </ToastProvider>
         </SidebarProvider>

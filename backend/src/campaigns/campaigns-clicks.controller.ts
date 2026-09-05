@@ -21,6 +21,7 @@ export class CampaignsClicksController {
     @Query('contentName') contentName?: string,
     @Query('isBot') isBot?: string,
     @Query('isNewVisitor') isNewVisitor?: string,
+    @Query('isTest') isTest?: string,
     @Query('converted') converted?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
@@ -39,6 +40,7 @@ export class CampaignsClicksController {
       isBot: isBot === 'true' ? true : isBot === 'false' ? false : undefined,
       isNewVisitor:
         isNewVisitor === 'true' ? true : isNewVisitor === 'false' ? false : undefined,
+      isTest: isTest === 'true' ? true : isTest === 'false' ? false : undefined,
       converted:
         converted === 'true' ? true : converted === 'false' ? false : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,

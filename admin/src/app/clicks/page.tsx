@@ -46,6 +46,7 @@ type Filters = {
   contentName: string;
   isBot: string;
   isNewVisitor: string;
+  isTest: string;
   converted: string;
 };
 
@@ -59,6 +60,7 @@ const EMPTY_FILTERS: Filters = {
   contentName: '',
   isBot: '',
   isNewVisitor: '',
+  isTest: '',
   converted: '',
 };
 
@@ -128,6 +130,7 @@ export default function ClicksPage() {
     if (filters.contentName) params.contentName = filters.contentName;
     if (filters.isBot) params.isBot = filters.isBot;
     if (filters.isNewVisitor) params.isNewVisitor = filters.isNewVisitor;
+    if (filters.isTest) params.isTest = filters.isTest;
     if (filters.converted) params.converted = filters.converted;
     if (excludeBots) params.excludeBots = 'true';
     return params;
@@ -347,6 +350,15 @@ export default function ClicksPage() {
         </Select>
         <Select
           className="w-auto"
+          value={filters.isTest}
+          onChange={(e) => setFilters({ ...filters, isTest: e.target.value })}
+        >
+          <option value="">Real + test</option>
+          <option value="false">Real only</option>
+          <option value="true">Test only</option>
+        </Select>
+        <Select
+          className="w-auto"
           value={filters.converted}
           onChange={(e) => setFilters({ ...filters, converted: e.target.value })}
         >
@@ -369,6 +381,7 @@ export default function ClicksPage() {
           filters.platform ||
           filters.country ||
           filters.isBot ||
+          filters.isTest ||
           filters.converted ||
           filters.isNewVisitor) && (
           <Button size="sm" variant="secondary" onClick={() => setFilters({ ...EMPTY_FILTERS, campaignId: filters.campaignId })}>
@@ -494,7 +507,12 @@ export default function ClicksPage() {
                         )}
                       </Td>
                       <Td>
-                        {c.isBot ? (
+                        {/* Test rows are the reason this log shows them at all —
+                            you open it right after firing a test click. The badge
+                            says why the row will never appear in a report. */}
+                        {c.isTest ? (
+                          <Badge tone="warning">Test</Badge>
+                        ) : c.isBot ? (
                           <Badge tone="danger">Bot {c.botScore}</Badge>
                         ) : (
                           <Badge tone="success">Human</Badge>

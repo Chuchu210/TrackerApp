@@ -90,7 +90,11 @@ export const DEFAULT_MEDIAGO_POSTBACK_URL =
 type ResolveContext = {
   click: Click;
   conversion: Conversion;
-  config?: PostbackConfig | null;
+  // Narrowed to the two fields this actually reads. Taking the whole
+  // PostbackConfig forced every caller and test to build a full row, and each
+  // field added to the model (the OpenAI ones, most recently) silently broke
+  // fixtures that SWC never typechecks.
+  config?: Partial<Pick<PostbackConfig, 'mediagoConversionType' | 'mediagoAccountName'>> | null;
   profileDefaults?: Record<string, unknown>;
   paramMappings?: ParamMapping[];
   campaign?: { id: string; name: string; externalId?: string | null };

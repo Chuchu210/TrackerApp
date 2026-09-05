@@ -131,7 +131,13 @@ export default function ConversionsPage() {
                     <Td>{c.eventType}</Td>
                     <Td className="tabular-nums">{c.revenue}</Td>
                     <Td>
-                      <Badge tone={statusTone(c.status)}>{c.status}</Badge>
+                      <span className="inline-flex items-center gap-1.5">
+                        <Badge tone={statusTone(c.status)}>{c.status}</Badge>
+                        {/* Postbacks really were sent for this row — it just
+                            never counts in a report. Saying so here avoids the
+                            "why is my conversion missing?" hunt. */}
+                        {c.isTest && <Badge tone="warning">Test</Badge>}
+                      </span>
                     </Td>
                     <Td>
                       {c.status === 'failed' && (
