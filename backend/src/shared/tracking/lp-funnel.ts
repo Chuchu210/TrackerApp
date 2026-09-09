@@ -13,7 +13,7 @@ export type LpFunnelStepDef = {
 export const LP_FUNNEL_STEPS: LpFunnelStepDef[] = [
   { stepId: 'visits', label: 'LP Arrivals', kind: 'visit', sortOrder: 0 },
   { stepId: 'viewcontent', label: 'View Content', kind: 'event', slugs: ['viewcontent', 'view_content', 'pageview'], mediagoCode: 1, sortOrder: 10 },
-  { stepId: 'quiz_started', label: 'Quiz started', kind: 'event', slugs: ['quiz_started', 'quiz_q1'], mediagoCode: 12, sortOrder: 16 },
+  { stepId: 'quiz_started', label: 'Quiz started', kind: 'event', slugs: ['quiz_started', 'quiz_q1'], sortOrder: 16 },
   { stepId: 'quiz_q2', label: 'Question 2', kind: 'event', slugs: ['quiz_q2'], sortOrder: 17 },
   { stepId: 'quiz_q3', label: 'Question 3', kind: 'event', slugs: ['quiz_q3'], sortOrder: 18 },
   { stepId: 'click_button', label: 'Click Button', kind: 'event', slugs: ['click_button', 'clickbutton'], mediagoCode: 12, sortOrder: 20 },

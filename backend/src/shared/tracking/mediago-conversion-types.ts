@@ -12,7 +12,7 @@ export const MEDIAGO_CONVERSION_TYPE_TABLE = [
   { code: 8, label: 'Purchase', slugs: ['purchase', 'sale', 'sales'] },
   { code: 9, label: 'Add to Wishlist', slugs: ['add_to_wishlist'] },
   { code: 10, label: 'Lead', slugs: ['lead', 'postalcode'] },
-  { code: 12, label: 'Click Button', slugs: ['click_button', 'clickbutton', 'call_click', 'call_started', 'quiz_started'] },
+  { code: 12, label: 'Click Button', slugs: ['click_button', 'clickbutton', 'call_click', 'call_started'] },
   { code: 13, label: 'Lead Qualified', slugs: ['lead_qualified', 'age_60', 'hearing_loss'] },
   { code: 14, label: 'Call Connected', slugs: ['call_connected', 'callconnected'] },
   { code: 15, label: 'Appointment Booked', slugs: ['appointment_booked'] },

@@ -1,9 +1,8 @@
 /**
- * Per-question quiz events go to Meta as standard Pixel events (AddToCart /
- * InitiateCheckout). They must not hit Mediago: unresolved slugs fall back to
- * conversion type 10 (Lead) and would poison bidding.
+ * Quiz steps are named custom events on Meta (QuizStarted / QuizQuestion2…).
+ * They must not go to Mediago: unmapped slugs fall back to type 10 (Lead).
  */
-const FACEBOOK_ONLY_EVENT = /^(quiz_q\d+|quiz_question_\d+)$/;
+const FACEBOOK_ONLY_EVENT = /^(quiz_started|quiz_q\d+|quiz_question_\d+)$/;
 
 export function shouldFireNetworkPostback(
   eventType: string | null | undefined,

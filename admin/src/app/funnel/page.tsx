@@ -200,8 +200,9 @@ export default function FunnelPage() {
             <Card>
               <h2 className={`${sectionHeadingClass} mb-1`}>Business events (postbacks)</h2>
               <p className={`text-xs ${mutedTextClass} mb-4`}>
-                Meta gets a standard funnel: PageView → ViewContent → AddToCart →
-                InitiateCheckout → Contact / Lead. Question 2–3 are not sent to Mediago.
+                Meta: PageView and Lead are standard. Quiz and call use specific
+                custom names (QuizStarted, CallStarted) — never a near-match
+                standard event.
               </p>
               <FunnelChart
                 steps={funnel.steps}

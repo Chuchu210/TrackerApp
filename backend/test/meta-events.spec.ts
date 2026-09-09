@@ -9,15 +9,12 @@ describe('metaEventNameForEventType', () => {
     expect(metaEventNameForEventType('lead')).toBe('Lead');
   });
 
-  it('maps the quiz funnel to standard Pixel events Meta optimises for', () => {
-    expect(metaEventNameForEventType('quiz_started')).toBe('ViewContent');
-    expect(metaEventNameForEventType('quiz_q2')).toBe('AddToCart');
-    expect(metaEventNameForEventType('quiz_q3')).toBe('InitiateCheckout');
-  });
-
-  it('maps call_click to Contact and call_connected to Schedule', () => {
-    expect(metaEventNameForEventType('call_click')).toBe('Contact');
-    expect(metaEventNameForEventType('call_connected')).toBe('Schedule');
+  it('does not map quiz or call onto the wrong standard Pixel events', () => {
+    expect(metaEventNameForEventType('quiz_started')).toBe('QuizStarted');
+    expect(metaEventNameForEventType('quiz_q2')).toBe('QuizQuestion2');
+    expect(metaEventNameForEventType('quiz_q3')).toBe('QuizQuestion3');
+    expect(metaEventNameForEventType('call_click')).toBe('CallStarted');
+    expect(metaEventNameForEventType('call_connected')).toBe('CallConnected');
   });
 
   it('maps purchase to Purchase', () => {
