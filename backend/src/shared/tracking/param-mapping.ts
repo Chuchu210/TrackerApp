@@ -1,6 +1,21 @@
-function isUnreplacedMacro(value?: string): boolean {
+/**
+ * Ad-network macros left unreplaced (URL opened directly, preview click, or a
+ * network that failed to substitute). Covers the three syntaxes we consume:
+ *   ${AD_ID}    Mediago / Voluum / Outbrain
+ *   {{ad.id}}   Meta (Facebook / Instagram)
+ *   {click_id}  Taboola / MGID
+ * A real value is never a lone brace-wrapped token, so anchoring on the whole
+ * trimmed string keeps this safe against false positives.
+ *
+ * Canonical implementation lives here (params.ts re-exports it) — it used to be
+ * duplicated in both files, and the copies drifted: only `${...}` was detected,
+ * so unsubstituted Meta macros were stored as real values.
+ */
+const UNREPLACED_MACRO_RE = /^(\$\{[^{}]*\}|\{\{[^{}]*\}\}|\{[^{}]*\})$/;
+
+export function isUnreplacedMacro(value?: string): boolean {
   if (!value) return false;
-  return /^\$\{[^}]+\}$/.test(value.trim());
+  return UNREPLACED_MACRO_RE.test(value.trim());
 }
 
 function sanitizeParam(value?: string): string | undefined {
@@ -28,6 +43,8 @@ export const CANONICAL_FIELDS = [
   'subid',
   'ad_id',
   'ad_title',
+  'adset_id',
+  'adset_name',
   'campaign_external_id',
   'publisher_name',
   'site_id',
@@ -73,6 +90,8 @@ const INTERNAL_TO_DB: Record<string, string> = {
   fbclid: 'fbclid',
   ad_id: 'adId',
   ad_title: 'adTitle',
+  adset_id: 'adsetId',
+  adset_name: 'adsetName',
   campaign_external_id: 'campaignExternalId',
   publisher_name: 'publisherName',
   site_id: 'siteId',

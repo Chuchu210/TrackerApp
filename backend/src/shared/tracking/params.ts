@@ -6,6 +6,8 @@ export interface NetworkParams {
   subid?: string;
   ad_id?: string;
   ad_title?: string;
+  adset_id?: string;
+  adset_name?: string;
   campaign_external_id?: string;
   publisher_name?: string;
   site_id?: string;
@@ -28,6 +30,7 @@ export interface TrackingParams extends NetworkParams {
 
 import {
   DEFAULT_PARAM_MAPPINGS,
+  isUnreplacedMacro,
   resolveParamsFromMappings,
   type ParamMapping,
 } from './param-mapping';
@@ -54,11 +57,8 @@ function containsTestToken(value: string): boolean {
   return words.some((w) => TEST_TOKENS.includes(w));
 }
 
-/** Mediago/Voluum macros left unreplaced when URL is opened directly in a browser */
-export function isUnreplacedMacro(value?: string): boolean {
-  if (!value) return false;
-  return /^\$\{[^}]+\}$/.test(value.trim());
-}
+/** Re-exported from param-mapping so both modules share one implementation. */
+export { isUnreplacedMacro };
 
 export function sanitizeParam(value?: string): string | undefined {
   if (!value || isUnreplacedMacro(value)) return undefined;
@@ -99,6 +99,8 @@ export function getTrackingParamsFromQuery(
     subid: resolved.subid,
     ad_id: resolved.ad_id,
     ad_title: resolved.ad_title,
+    adset_id: resolved.adset_id,
+    adset_name: resolved.adset_name,
     campaign_external_id: resolved.campaign_external_id,
     publisher_name: resolved.publisher_name,
     site_id: resolved.site_id,

@@ -291,6 +291,8 @@ model Click {
   // Mediago / native ad params (from Voluum-style URLs)
   adId               String? @map("ad_id")
   adTitle            String? @map("ad_title")
+  adsetId            String? @map("adset_id")
+  adsetName          String? @map("adset_name")
   campaignExternalId String? @map("campaign_external_id")
   publisherName      String? @map("publisher_name")
   siteId             String? @map("site_id")
@@ -385,6 +387,9 @@ model Click {
   @@index([ipAddress, createdAt])
   @@index([trackingId])
   @@index([publisherName])
+  // Creative-level reporting groups by adset the same way it groups by
+  // publisher/platform, so it gets the same index treatment.
+  @@index([adsetId])
   @@index([platform])
   @@index([device])
   @@index([countryCode])

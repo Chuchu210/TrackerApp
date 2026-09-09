@@ -124,7 +124,7 @@ export class ClicksService {
       siteId: params.site_id,
       platform: params.platform,
       assetId: params.asset_id,
-      adsetId: params.utm_adset,
+      adsetId: params.adset_id || params.adset_name || params.utm_adset,
       placement: params.utm_content,
     });
     const clickId = generateClickId();
@@ -190,6 +190,8 @@ export class ClicksService {
         obref: openAi.obref,
         adId: params.ad_id || null,
         adTitle: params.ad_title || null,
+        adsetId: params.adset_id || null,
+        adsetName: params.adset_name || null,
         campaignExternalId: params.campaign_external_id || null,
         publisherName: params.publisher_name || null,
         siteId: params.site_id || null,

@@ -12,6 +12,11 @@ const OUTBRAIN_MAPPINGS: ParamMapping[] = [
   { internalField: 'utm_campaign', displayLabel: 'Campaign', externalKeys: ['utm_campaign', 'campaignid'], showInReports: true, priority: 3 },
 ];
 
+/**
+ * Meta sends its own dynamic params ({{ad.id}} & co, see FACEBOOK_DIRECT_AD_TEMPLATE).
+ * Without these mappings the tracker only kept the static UTMs, so reports had no
+ * campaign / adset / ad granularity — you could not tell which creative produced a lead.
+ */
 const FACEBOOK_MAPPINGS: ParamMapping[] = [
   { internalField: 'fbclid', displayLabel: 'FBCLID', externalKeys: ['fbclid'], showInReports: true, priority: 1 },
   { internalField: 'utm_source', displayLabel: 'UTM Source', externalKeys: ['utm_source'], showInReports: true, priority: 2 },
@@ -19,6 +24,17 @@ const FACEBOOK_MAPPINGS: ParamMapping[] = [
   { internalField: 'utm_campaign', displayLabel: 'UTM Campaign', externalKeys: ['utm_campaign'], showInReports: true, priority: 4 },
   { internalField: 'utm_content', displayLabel: 'UTM Content', externalKeys: ['utm_content'], showInReports: true, priority: 5 },
   { internalField: 'utm_term', displayLabel: 'UTM Term', externalKeys: ['utm_term'], showInReports: false, priority: 6 },
+  // Meta object IDs + names — the granularity needed to score creatives.
+  { internalField: 'campaign_external_id', displayLabel: 'FB Campaign ID', externalKeys: ['campaign_id'], urlMacro: '{{campaign.id}}', showInReports: true, priority: 10 },
+  { internalField: 'adset_id', displayLabel: 'FB Adset ID', externalKeys: ['adset_id'], urlMacro: '{{adset.id}}', showInReports: true, priority: 11 },
+  { internalField: 'adset_name', displayLabel: 'FB Adset', externalKeys: ['adset_name'], urlMacro: '{{adset.name}}', showInReports: true, priority: 12 },
+  { internalField: 'ad_id', displayLabel: 'FB Ad ID', externalKeys: ['ad_id'], urlMacro: '{{ad.id}}', showInReports: true, priority: 13 },
+  // Ad name is where the image/title/CTA combination lives, per naming convention.
+  { internalField: 'ad_title', displayLabel: 'FB Ad', externalKeys: ['ad_name'], urlMacro: '{{ad.name}}', showInReports: true, priority: 14 },
+  // feed / story / reels — reuses the existing `platform` column.
+  { internalField: 'platform', displayLabel: 'Placement', externalKeys: ['placement'], urlMacro: '{{placement}}', showInReports: true, priority: 15 },
+  // fb / ig / an / msg — reuses the existing `publisher_name` column.
+  { internalField: 'publisher_name', displayLabel: 'Meta Surface', externalKeys: ['site_source_name'], urlMacro: '{{site_source_name}}', showInReports: true, priority: 16 },
 ];
 
 const OPENAI_MAPPINGS: ParamMapping[] = [
@@ -134,7 +150,10 @@ export const SYSTEM_TRAFFIC_SOURCE_PROFILES: SeedProfile[] = [
     trackingModeDefault: TrackingMode.direct,
     clickUrlTemplate: null,
     directAdUrlTemplate:
-      '{destinationUrl}?utm_source=facebook&utm_medium=paid_social&utm_campaign={campaignName}',
+      '{destinationUrl}?utm_source=facebook&utm_medium=paid_social&utm_campaign={campaignName}' +
+      '&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}' +
+      '&adset_name={{adset.name}}&ad_name={{ad.name}}' +
+      '&placement={{placement}}&site_source_name={{site_source_name}}',
     paramMappings: FACEBOOK_MAPPINGS,
     conversionMethod: ConversionMethod.facebook_capi,
     postbackDefaults: {
@@ -145,7 +164,7 @@ export const SYSTEM_TRAFFIC_SOURCE_PROFILES: SeedProfile[] = [
       postbackUrlTemplate: 'POST https://graph.facebook.com/v21.0/{pixelId}/events (Conversions API — configure pixel + token on campaign)',
     },
     setupNote:
-      'Put the Direct Ad URL in Facebook. Facebook adds fbclid automatically. Add the LP script to your landing page.',
+      'Paste the Direct Ad URL as the ad\'s Website URL in Meta (not in "URL parameters" — the template already carries the query string). Meta substitutes {{campaign.id}}, {{adset.id}}, {{ad.id}}, {{adset.name}}, {{ad.name}}, {{placement}} and {{site_source_name}} at click time, which is what gives campaign/adset/ad granularity in reports. Facebook adds fbclid automatically. Add the LP script to your landing page.',
     isSystem: true,
   },
   {
