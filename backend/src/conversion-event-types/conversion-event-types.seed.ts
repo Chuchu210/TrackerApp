@@ -5,9 +5,12 @@ export const DEFAULT_CONVERSION_EVENT_TYPES: {
   countsAsConversion: boolean;
 }[] = [
   { slug: 'viewcontent', displayLabel: 'ViewCONTENT revenue', sortOrder: 5, countsAsConversion: false },
-  { slug: 'click_button', displayLabel: 'Click Button revenue', sortOrder: 8, countsAsConversion: false },
-  { slug: 'call_click', displayLabel: 'Call click revenue', sortOrder: 9, countsAsConversion: false },
-  { slug: 'lead', displayLabel: 'Lead revenue', sortOrder: 10, countsAsConversion: true },
+  { slug: 'quiz_started', displayLabel: 'Quiz started', sortOrder: 6, countsAsConversion: false },
+  { slug: 'quiz_q2', displayLabel: 'Question 2', sortOrder: 7, countsAsConversion: false },
+  { slug: 'quiz_q3', displayLabel: 'Question 3', sortOrder: 8, countsAsConversion: false },
+  { slug: 'click_button', displayLabel: 'Click Button revenue', sortOrder: 9, countsAsConversion: false },
+  { slug: 'call_click', displayLabel: 'Call started', sortOrder: 10, countsAsConversion: false },
+  { slug: 'lead', displayLabel: 'Lead revenue', sortOrder: 11, countsAsConversion: true },
   { slug: 'call_connected', displayLabel: 'Call Connected revenue', sortOrder: 14, countsAsConversion: true },
   { slug: 'sale', displayLabel: 'Sales revenue', sortOrder: 20, countsAsConversion: true },
   { slug: 'sales', displayLabel: 'Sales revenue', sortOrder: 21, countsAsConversion: true },

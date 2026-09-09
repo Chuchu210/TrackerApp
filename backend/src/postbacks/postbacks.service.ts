@@ -8,6 +8,7 @@ import { GoogleStrategy } from './strategies/google.strategy';
 import { OutbrainStrategy } from './strategies/outbrain.strategy';
 import { OpenAiStrategy } from './strategies/openai.strategy';
 import { PostbackStrategy } from './interfaces/postback-strategy.interface';
+import { shouldFireNetworkPostback } from '../shared/tracking/postback-event-gate';
 
 @Injectable()
 export class PostbacksService {
@@ -39,7 +40,12 @@ export class PostbacksService {
       },
     });
 
-    if (!conversion || !conversion.campaign.postbackConfig) {
+    if (!conversion) {
+      this.logger.warn(`Conversion ${conversionId} not found`);
+      return;
+    }
+
+    if (!conversion.campaign.postbackConfig) {
       this.logger.warn(`Conversion ${conversionId} not found or no postback config`);
       return;
     }
@@ -66,6 +72,7 @@ export class PostbacksService {
     let anySent = false;
 
     for (const strategy of this.strategies) {
+      if (!shouldFireNetworkPostback(conversion.eventType, strategy.getNetwork())) continue;
       if (!strategy.canHandle(config, campaignContext)) continue;
 
       let result;

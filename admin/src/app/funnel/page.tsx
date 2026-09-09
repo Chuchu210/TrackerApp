@@ -182,7 +182,7 @@ export default function FunnelPage() {
             {questions.length === 0 ? (
               <EmptyState
                 title="No quiz steps recorded yet"
-                description="The LP is receiving visits, but it is not calling trackStep on each question. Until you add those calls, every quiz click collapses into a single click_button and you cannot see Q1 → Q2 → Q3."
+                description="The LP is receiving visits, but it is not calling trackStep on each question."
               />
             ) : (
               <QuestionDropFunnel
@@ -200,8 +200,8 @@ export default function FunnelPage() {
             <Card>
               <h2 className={`${sectionHeadingClass} mb-1`}>Business events (postbacks)</h2>
               <p className={`text-xs ${mutedTextClass} mb-4`}>
-                View Content, Lead, Purchase — these fire network postbacks. Quiz questions
-                are not here on purpose: one click_button cannot represent five questions.
+                Meta gets a standard funnel: PageView → ViewContent → AddToCart →
+                InitiateCheckout → Contact / Lead. Question 2–3 are not sent to Mediago.
               </p>
               <FunnelChart
                 steps={funnel.steps}

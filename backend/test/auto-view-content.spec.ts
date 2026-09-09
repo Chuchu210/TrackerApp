@@ -4,8 +4,8 @@ import {
 } from '../src/shared/tracking/auto-view-content';
 
 describe('shouldSendAutoViewContent', () => {
-  it('skips viewcontent for lp1 (click_button optimization)', () => {
-    expect(shouldSendAutoViewContent('lp1')).toBe(false);
+  it('sends pageview for lp1 so Facebook and Mediago both get View Content', () => {
+    expect(shouldSendAutoViewContent('lp1')).toBe(true);
   });
 
   it('sends viewcontent for other campaigns', () => {

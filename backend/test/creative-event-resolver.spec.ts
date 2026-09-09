@@ -8,7 +8,7 @@ describe('creative event resolver', () => {
   it('resolves call_click slugs from LP funnel', () => {
     const event = resolveCreativeEventSlugs('call_click');
     expect(event.stepId).toBe('call_click');
-    expect(event.label).toBe('Call Click');
+    expect(event.label).toBe('Call started');
     expect(event.slugs).toContain('call_click');
   });
 

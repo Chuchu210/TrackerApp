@@ -35,6 +35,7 @@ describe('TrackerScriptService.getScript', () => {
     expect(js).toContain('function whenCidReady');
     expect(js).toContain('function flushPending');
     expect(js).toContain('whenCidReady(function ()');
+    expect(js).toContain('trackQuizStarted');
     expect(js).not.toContain('credentials: "include"');
   });
 });

@@ -1,20 +1,32 @@
 /**
- * Maps our internal conversion eventType slugs (see lp-funnel.ts) to Meta
- * Conversions API standard event names, so FacebookStrategy reports the
- * actual event instead of a fixed value. Unmapped slugs fall back to a
- * PascalCase custom event name, which Meta CAPI accepts as a custom event.
+ * Maps internal conversion slugs to Meta *standard* Pixel events.
+ * Custom events are weakly trained by Advantage+; this funnel stays on
+ * the events Meta actually optimises for.
+ *
+ *   LP load        → PageView
+ *   Quiz Q1        → ViewContent
+ *   Quiz Q2        → AddToCart
+ *   Quiz Q3        → InitiateCheckout
+ *   Call tap       → Contact
+ *   Call connected → Schedule
+ *   Form submit    → Lead
  *
  * Reference: https://developers.facebook.com/docs/meta-pixel/reference
  */
 const META_STANDARD_EVENT_MAP: Record<string, string> = {
-  // Fired automatically on LP page load (see auto-view-content.ts) — the
-  // base "the page was viewed" signal Meta expects as PageView.
   viewcontent: 'PageView',
   view_content: 'PageView',
-  click_button: 'Lead',
+  pageview: 'PageView',
+  quiz_started: 'ViewContent',
+  quiz_q1: 'ViewContent',
+  quiz_q2: 'AddToCart',
+  quiz_q3: 'InitiateCheckout',
+  click_button: 'ViewContent',
   call_click: 'Contact',
-  call_connected: 'Contact',
+  call_started: 'Contact',
+  call_connected: 'Schedule',
   lead: 'Lead',
+  callback_request: 'Lead',
   postalcode: 'Lead',
   lead_qualified: 'Lead',
   account_opening: 'SubmitApplication',
@@ -26,14 +38,19 @@ const META_STANDARD_EVENT_MAP: Record<string, string> = {
   sales: 'Purchase',
 };
 
+const STANDARD_META_EVENTS = new Set(Object.values(META_STANDARD_EVENT_MAP));
+
 export function metaEventNameForEventType(eventType: string): string {
   const mapped = META_STANDARD_EVENT_MAP[eventType.toLowerCase()];
   if (mapped) return mapped;
-  // Fallback: turn an unknown slug like "custom_thing" into "CustomThing"
-  // so CAPI still accepts it as a named custom event.
+  // Last resort only — Advantage+ largely ignores custom names.
   return eventType
     .split(/[_\s-]+/)
     .filter(Boolean)
     .map((w) => w[0].toUpperCase() + w.slice(1))
     .join('');
+}
+
+export function isStandardMetaEvent(eventName: string): boolean {
+  return STANDARD_META_EVENTS.has(eventName);
 }

@@ -267,6 +267,10 @@ export class TrackerScriptService {
     trackConversion("click_button", meta || {});
   };
 
+  w.tkCallback.trackQuizStarted = function (meta) {
+    trackConversion("quiz_started", meta || {});
+  };
+
   w.tkCallback.trackCallClick = function (meta) {
     trackConversion("call_click", meta || {});
   };

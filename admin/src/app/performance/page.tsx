@@ -38,11 +38,14 @@ import {
 type Tab = 'dashboard' | 'images' | 'headlines' | 'combos';
 
 const PERFORMANCE_EVENT_OPTIONS = [
-  { id: 'call_click', label: 'Call Click' },
-  { id: 'click_button', label: 'Click Button' },
+  { id: 'viewcontent', label: 'PageView' },
+  { id: 'quiz_started', label: 'Quiz started' },
+  { id: 'quiz_q2', label: 'Question 2' },
+  { id: 'quiz_q3', label: 'Question 3' },
+  { id: 'call_click', label: 'Call started' },
   { id: 'lead', label: 'Lead' },
   { id: 'call_connected', label: 'Call Connected' },
-  { id: 'viewcontent', label: 'View Content' },
+  { id: 'click_button', label: 'Click Button (legacy)' },
 ];
 
 const QUALITY_TONE: Record<
