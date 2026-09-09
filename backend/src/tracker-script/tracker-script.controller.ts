@@ -7,8 +7,10 @@ import { ClicksService } from '../clicks/clicks.service';
 import { ConversionsService } from '../conversions/conversions.service';
 import { buildVisitorContextFromRequest } from '../clicks/visitor-context.util';
 import { buildVisitorCookie } from '../common/utils/visitor-id';
-import { isMediagoTrafficSource } from '../shared/tracking/mediago-conversion-types';
-import { shouldSendAutoViewContent } from '../shared/tracking/auto-view-content';
+import {
+  shouldSendAutoViewContent,
+  wantsAutoViewContent,
+} from '../shared/tracking/auto-view-content';
 
 @Controller('t')
 export class TrackerScriptController {
@@ -45,13 +47,12 @@ export class TrackerScriptController {
     const result = await this.clicks.registerDirectVisit(dto.campaign, query, visitor);
     res.append('Set-Cookie', buildVisitorCookie(result.visitorId, req.secure));
 
-    const mediago =
-      isMediagoTrafficSource(result.utmSource) ||
-      result.trafficSource === 'mediago' ||
-      isMediagoTrafficSource(query.utm_source);
+    const autoViewContentSource =
+      wantsAutoViewContent(result.utmSource, result.trafficSource) ||
+      wantsAutoViewContent(query.utm_source);
     const sendViewContent =
       !dto.noViewContent && shouldSendAutoViewContent(result.campaignSlug);
-    if (mediago && sendViewContent) {
+    if (autoViewContentSource && sendViewContent) {
       setImmediate(() => {
         this.conversions
           .create({

@@ -130,10 +130,24 @@ export class TrackerScriptService {
     meta = meta || {};
     var cid = getCid();
     if (!cid) return;
+    // Meta pixel cookies drive Conversions API match quality. Copy rather than
+    // mutate: the caller's object is also queued in tkCallback.state.
+    var metadata = {};
+    for (var k in meta) {
+      if (Object.prototype.hasOwnProperty.call(meta, k)) metadata[k] = meta[k];
+    }
+    if (!metadata.fbp) {
+      var fbp = readCookie("_fbp");
+      if (fbp) metadata.fbp = fbp;
+    }
+    if (!metadata.fbc) {
+      var fbc = readCookie("_fbc");
+      if (fbc) metadata.fbc = fbc;
+    }
     var body = {
       clickId: cid,
       eventType: eventType || meta.eventType || meta.et || meta.event || "lead",
-      metadata: meta,
+      metadata: metadata,
     };
     if (meta.payout != null) body.revenue = Number(meta.payout);
     else if (meta.revenue != null) body.revenue = Number(meta.revenue);
@@ -146,12 +160,19 @@ export class TrackerScriptService {
     }).catch(function () {});
   }
 
+  function isFacebookSource(params) {
+    var src = (params.utm_source || "").toLowerCase();
+    return src.indexOf("facebook") >= 0 || src === "fb" || src === "meta" || !!params.fbclid;
+  }
+
   function maybeAutoViewContent(tag) {
     if (isNoViewContent(tag)) return;
     var cid = getCid();
     if (!cid) return;
     var params = urlParams();
-    if (!isMediagoSource(params)) return;
+    // Was Mediago-only, so Facebook traffic never produced the first funnel
+    // step and Meta never received the matching PageView.
+    if (!isMediagoSource(params) && !isFacebookSource(params)) return;
     var dedupeKey = "tk-vc-sent-" + cid;
     if (g.getItem(dedupeKey)) return;
     g.setItem(dedupeKey, "1");

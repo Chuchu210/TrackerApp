@@ -73,6 +73,7 @@ export class ConversionsController {
     return {
       incomingPostbackIp: ip,
       incomingPostbackUrl: `${req.protocol}://${req.get('host')}${req.originalUrl}`,
+      cookieHeader: req.headers.cookie,
       ...postbackParams,
     };
   }

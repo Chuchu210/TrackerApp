@@ -11,6 +11,7 @@ import { PostbacksService } from '../postbacks/postbacks.service';
 import { CreateConversionDto } from './dto/create-conversion.dto';
 import type { ConversionContext } from './dto/conversion-context';
 import { isTestLeadFromQuestionnaireData } from '../shared/tracking/params';
+import { resolveFacebookIdentifiers } from '../shared/tracking/facebook-cookies';
 import {
   DEFAULT_PARAM_MAPPINGS,
   getReportFieldsFromClick,
@@ -133,6 +134,18 @@ export class ConversionsService {
       }
     }
 
+    // Facebook CAPI match quality depends on fbp/fbc. They were never captured:
+    // the browser script did not read the Meta cookies, and the server-side
+    // helper existed but was called from nowhere — so every CAPI event went out
+    // without them. Resolve them here, once, for every intake path.
+    const facebookIds = resolveFacebookIdentifiers({
+      metadata: dto.metadata as Record<string, unknown> | undefined,
+      cookieHeader: context?.cookieHeader,
+      fbclid: click.fbclid,
+      clickedAt: click.createdAt,
+    });
+    const metadata = { ...(dto.metadata || {}), ...facebookIds };
+
     const settings = await this.settings.getEffective();
     const fx = buildFxConfig(settings.baseCurrency, settings.fxRates);
     // Ignore client-supplied money on untrusted (public) calls.
@@ -153,7 +166,7 @@ export class ConversionsService {
         costBase: normalizeToBase(cost, dto.currency, fx),
         transactionId: dto.transactionId || null,
         status: ConversionStatus.pending,
-        metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
+        metadata: metadata as Prisma.InputJsonValue,
         incomingPostbackIp: context?.incomingPostbackIp || null,
         incomingPostbackUrl: context?.incomingPostbackUrl || null,
         postbackParam1: dto.postbackParam1 || context?.postbackParam1 || null,

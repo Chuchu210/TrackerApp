@@ -9,6 +9,12 @@ export interface ConversionContext {
   trusted?: boolean;
   incomingPostbackIp?: string;
   incomingPostbackUrl?: string;
+  /**
+   * Raw Cookie header of the incoming request. Used to recover Meta's _fbp/_fbc
+   * when the caller did not put them in metadata — Facebook CAPI match quality
+   * depends on them, and they are what the Meta pixel drops in the browser.
+   */
+  cookieHeader?: string;
   postbackParam1?: string;
   postbackParam2?: string;
   postbackParam3?: string;
