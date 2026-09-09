@@ -23,6 +23,7 @@ import { PathsModule } from './paths/paths.module';
 import { SettingsModule } from './settings/settings.module';
 import { OffersModule } from './offers/offers.module';
 import { AffiliateNetworksModule } from './affiliate-networks/affiliate-networks.module';
+import { LeadsModule } from './leads/leads.module';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { AffiliateNetworksModule } from './affiliate-networks/affiliate-networks
     PlacementsModule,
     RulesModule,
     PathsModule,
+    LeadsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
