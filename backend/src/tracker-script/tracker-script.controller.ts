@@ -3,6 +3,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { TrackerScriptService } from './tracker-script.service';
 import { DirectVisitDto } from './dto/direct-visit.dto';
+import { TrackStepDto } from './dto/track-step.dto';
 import { ClicksService } from '../clicks/clicks.service';
 import { ConversionsService } from '../conversions/conversions.service';
 import { buildVisitorContextFromRequest } from '../clicks/visitor-context.util';
@@ -11,6 +12,7 @@ import {
   shouldSendAutoViewContent,
   wantsAutoViewContent,
 } from '../shared/tracking/auto-view-content';
+import { FunnelStepsService } from '../analytics/funnel-steps.service';
 
 @Controller('t')
 export class TrackerScriptController {
@@ -18,6 +20,7 @@ export class TrackerScriptController {
     private readonly trackerScript: TrackerScriptService,
     private readonly clicks: ClicksService,
     private readonly conversions: ConversionsService,
+    private readonly funnelSteps: FunnelStepsService,
   ) {}
 
   @Get('tracker.js')
@@ -65,6 +68,20 @@ export class TrackerScriptController {
     }
 
     return result;
+  }
+
+  /**
+   * LP funnel step reached (quiz question, form stage...). Analytics only — no
+   * postback, no revenue — so a multi-step page can report every step without
+   * sending one CAPI event per step.
+   */
+  @Post('step')
+  @UseGuards(ThrottlerGuard)
+  @Header('Access-Control-Allow-Origin', '*')
+  async trackStep(@Body() dto: TrackStepDto) {
+    // The tracker fetch never reads the body; keep the response minimal.
+    await this.funnelSteps.record(dto);
+    return { ok: true };
   }
 
   @Get('pixel')

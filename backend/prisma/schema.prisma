@@ -187,6 +187,7 @@ model Campaign {
   postbackConfig    PostbackConfig?
   clicks            Click[]
   conversions       Conversion[]
+  funnelStepEvents  FunnelStepEvent[]
   platformMappings  CampaignPlatformMapping[]
   spendSnapshots    CampaignSpendSnapshot[]
   landers           Lander[]
@@ -379,6 +380,7 @@ model Click {
   createdAt DateTime @default(now()) @map("created_at")
 
   conversions Conversion[]
+  funnelSteps FunnelStepEvent[]
 
   @@index([campaignId, createdAt])
   @@index([campaignId, visitorId])
@@ -396,6 +398,40 @@ model Click {
   @@index([isBot])
   @@index([isTest])
   @@map("clicks")
+}
+
+/// One row per (visit, step) reached inside a landing page — quiz question,
+/// form stage, whatever the LP declares via tkCallback.trackStep().
+///
+/// Deliberately NOT a Conversion: conversions are business events that fire
+/// postbacks to the ad networks, and they are unique per (clickId, eventType),
+/// so a 5-question quiz collapsed into a single `click_button` row and the
+/// drop-off between questions was invisible. Funnel steps are pure analytics —
+/// no postback, no revenue — so they get their own table and can be recorded
+/// as many times as the LP has steps.
+model FunnelStepEvent {
+  id         String   @id @default(uuid())
+  clickId    String   @map("click_id")
+  click      Click    @relation(fields: [clickId], references: [clickId], onDelete: Cascade)
+  campaignId String   @map("campaign_id")
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  /// Sort order within the funnel (1 = first step after landing).
+  stepIndex Int     @map("step_index")
+  /// Stable identifier used for grouping, e.g. "q1" or "step_2".
+  stepKey   String  @map("step_key")
+  /// Human label shown in reports, e.g. "Question 2 — budget".
+  stepLabel String? @map("step_label")
+
+  isTest    Boolean  @default(false) @map("is_test")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// A visitor who goes back and re-answers the same step must not be counted
+  /// twice: the table answers "how many visits reached this step".
+  @@unique([clickId, stepKey])
+  @@index([campaignId, createdAt])
+  @@index([campaignId, stepIndex])
+  @@map("funnel_step_events")
 }
 
 model Conversion {

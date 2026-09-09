@@ -3,6 +3,7 @@ import { AnalyticsController } from './analytics.controller';
 import { AnalyticsService } from './analytics.service';
 import { CampaignReportService } from './campaign-report.service';
 import { FunnelAnalyticsService } from './funnel-analytics.service';
+import { FunnelStepsService } from './funnel-steps.service';
 import { CreativeAnalyticsService } from './creative-analytics.service';
 import { PlacementAnalyticsService } from './placement-analytics.service';
 import { ProfitabilityAnalyticsService } from './profitability-analytics.service';
@@ -18,6 +19,7 @@ import { ConversionEventTypesModule } from '../conversion-event-types/conversion
     IncomingPostbacksService,
     CampaignReportService,
     FunnelAnalyticsService,
+    FunnelStepsService,
     CreativeAnalyticsService,
     PlacementAnalyticsService,
     ProfitabilityAnalyticsService,
@@ -28,6 +30,7 @@ import { ConversionEventTypesModule } from '../conversion-event-types/conversion
     IncomingPostbacksService,
     CampaignReportService,
     FunnelAnalyticsService,
+    FunnelStepsService,
     CreativeAnalyticsService,
     PlacementAnalyticsService,
     ProfitabilityAnalyticsService,

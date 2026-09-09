@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import { AnalyticsService } from './analytics.service';
 import { CampaignReportService } from './campaign-report.service';
 import { FunnelAnalyticsService } from './funnel-analytics.service';
+import { FunnelStepsService } from './funnel-steps.service';
 import { CreativeAnalyticsService } from './creative-analytics.service';
 import { PlacementAnalyticsService } from './placement-analytics.service';
 import { ProfitabilityAnalyticsService } from './profitability-analytics.service';
@@ -18,6 +19,7 @@ export class AnalyticsController {
     private readonly analytics: AnalyticsService,
     private readonly campaignReport: CampaignReportService,
     private readonly funnelAnalytics: FunnelAnalyticsService,
+    private readonly funnelSteps: FunnelStepsService,
     private readonly creativeAnalytics: CreativeAnalyticsService,
     private readonly placementAnalytics: PlacementAnalyticsService,
     private readonly profitabilityAnalytics: ProfitabilityAnalyticsService,
@@ -287,6 +289,28 @@ export class AnalyticsController {
     @Query('to') to?: string,
   ) {
     return this.funnelAnalytics.getFunnel(campaignId, from, to);
+  }
+
+  /**
+   * Step-by-step LP funnel for one campaign: arrivals, then how many visits
+   * reached each step the landing page declares via tkCallback.trackStep().
+   * Answers "where do people drop off", which the conversion-based funnel
+   * cannot: conversions are unique per (click, eventType), so every quiz step
+   * collapsed into a single click_button row.
+   */
+  @Get('funnel/steps')
+  getFunnelSteps(
+    @Query('campaignId') campaignId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('includeTest') includeTest?: string,
+  ) {
+    return this.funnelSteps.getStepFunnel(
+      campaignId,
+      from,
+      to,
+      includeTest === 'true',
+    );
   }
 
   @Get('funnel/postbacks')

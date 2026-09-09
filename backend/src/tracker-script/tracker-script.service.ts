@@ -179,6 +179,44 @@ export class TrackerScriptService {
     trackConversion("viewcontent", { source: "auto_pageview", utm_source: params.utm_source || "mediago" });
   }
 
+  /**
+   * Report that the visitor reached a step of the page (quiz question, form
+   * stage). Analytics only: no postback, no revenue, and safe to call on every
+   * step — unlike registerConversion, which is unique per (visit, eventType)
+   * and therefore only ever recorded the first step.
+   *
+   *   tkCallback.trackStep(1, "Question 1 - situation")
+   *   tkCallback.trackStep({ index: 2, key: "q2", label: "Budget" })
+   */
+  w.tkCallback.trackStep = function (step, label) {
+    var cid = getCid();
+    if (!cid) return;
+    var index, key, text;
+    if (step && typeof step === "object") {
+      index = step.index != null ? step.index : step.stepIndex;
+      key = step.key || step.stepKey;
+      text = step.label || step.stepLabel;
+    } else {
+      index = step;
+      text = label;
+    }
+    if (index == null && !key) return;
+    var n = parseInt(index, 10);
+    if (isNaN(n)) n = 0;
+    if (!key) key = "step_" + n;
+    fetch(TK_BASE + "/t/step", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clickId: cid,
+        stepIndex: n,
+        stepKey: String(key),
+        stepLabel: text ? String(text) : undefined,
+      }),
+      keepalive: true,
+    }).catch(function () {});
+  };
+
   w.tkCallback.registerConversion = function (meta) {
     meta = meta || {};
     w.tkCallback.state.callbackQueue.push(meta);
