@@ -349,6 +349,7 @@ export class LandersService {
       trackerBase,
       lander.injectTracker,
       attrs,
+      { slug: lander.slug, name: lander.name },
     );
     if (!scriptTag) return;
 

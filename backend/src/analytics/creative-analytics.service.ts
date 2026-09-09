@@ -18,6 +18,8 @@ import {
   computeBotWastedSpend,
   fetchCampaignSpend,
 } from './analytics-spend.util';
+import { MetaCreativesService } from '../platform-sync/meta-creatives.service';
+import type { ParsedMetaAdCreative } from '../platform-sync/meta-ad-creative.parse';
 
 type ClickRow = {
   clickId: string;
@@ -39,11 +41,23 @@ type GroupAcc = {
   convertingVisits: number;
   conversions: number;
   revenue: number;
+  imageUrl?: string;
+  cta?: string;
+};
+
+type ResolvedCreative = {
+  key: string;
+  label: string;
+  imageUrl?: string;
+  cta?: string;
 };
 
 @Injectable()
 export class CreativeAnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly metaCreatives: MetaCreativesService,
+  ) {}
 
   async getCreativeReport(filters: VisitAnalyticsFilters, options: CreativeReportOptions = {}) {
     const event = resolveCreativeEventSlugs(options.eventType);
@@ -109,6 +123,10 @@ export class CreativeAnalyticsService {
       convByClick.set(conv.clickId, cur);
     }
 
+    const specs = await this.metaCreatives.getByAdIds(
+      clicks.map((click) => click.adId || '').filter(Boolean),
+    );
+
     const imageGroups = new Map<string, GroupAcc>();
     const headlineGroups = new Map<string, GroupAcc>();
     const pairGroups = new Map<
@@ -120,13 +138,14 @@ export class CreativeAnalyticsService {
     const headlineImageStats = new Map<string, Map<string, { visits: number; converting: number }>>();
 
     for (const click of clicks) {
-      const image = this.resolveImage(click);
-      const headline = this.resolveHeadline(click);
+      const spec = click.adId ? specs.get(click.adId) : undefined;
+      const image = this.resolveImage(click, spec);
+      const headline = this.resolveHeadline(click, spec);
       const pairKey = `${image.key}|||${headline.key}`;
       const conv = convByClick.get(click.clickId);
 
-      this.accumulate(imageGroups, image.key, image.label, click, conv);
-      this.accumulate(headlineGroups, headline.key, headline.label, click, conv);
+      this.accumulate(imageGroups, image.key, image.label, click, conv, image);
+      this.accumulate(headlineGroups, headline.key, headline.label, click, conv, headline);
       this.accumulatePair(pairGroups, pairKey, image, headline, click, conv);
 
       if (!imageHeadlineStats.has(image.key)) imageHeadlineStats.set(image.key, new Map());
@@ -264,7 +283,10 @@ export class CreativeAnalyticsService {
     });
   }
 
-  private resolveImage(click: ClickRow): { key: string; label: string } {
+  private resolveImage(
+    click: ClickRow,
+    spec?: ParsedMetaAdCreative,
+  ): ResolvedCreative {
     if (click.assetId?.trim()) {
       return { key: click.assetId.trim(), label: click.assetId.trim() };
     }
@@ -273,14 +295,23 @@ export class CreativeAnalyticsService {
       return { key: `content:${v}`, label: v };
     }
     if (click.adId?.trim()) {
-      return { key: `ad:${click.adId.trim()}`, label: `Ad ${click.adId.trim()}` };
+      const imageUrl = spec?.imageUrl || spec?.thumbnailUrl;
+      return {
+        key: imageUrl || `ad:${click.adId.trim()}`,
+        label: spec?.adName || spec?.headline || `Ad ${click.adId.trim()}`,
+        imageUrl: spec?.thumbnailUrl || spec?.imageUrl,
+        cta: spec?.cta,
+      };
     }
     return { key: '(unknown)', label: '(unknown image)' };
   }
 
-  private resolveHeadline(click: ClickRow): { key: string; label: string } {
-    const t = click.adTitle?.trim();
-    if (t) return { key: t, label: t };
+  private resolveHeadline(
+    click: ClickRow,
+    spec?: ParsedMetaAdCreative,
+  ): ResolvedCreative {
+    const headline = spec?.headline?.trim() || click.adTitle?.trim();
+    if (headline) return { key: headline, label: headline, cta: spec?.cta };
     return { key: '(unknown)', label: '(unknown headline)' };
   }
 
@@ -290,6 +321,7 @@ export class CreativeAnalyticsService {
     label: string,
     click: ClickRow,
     conv: { events: number; revenue: number } | undefined,
+    extra?: { imageUrl?: string; cta?: string },
   ) {
     const g = groups.get(key) || {
       label,
@@ -300,7 +332,11 @@ export class CreativeAnalyticsService {
       convertingVisits: 0,
       conversions: 0,
       revenue: 0,
+      imageUrl: extra?.imageUrl,
+      cta: extra?.cta,
     };
+    if (!g.imageUrl && extra?.imageUrl) g.imageUrl = extra.imageUrl;
+    if (!g.cta && extra?.cta) g.cta = extra.cta;
     g.visits++;
     if (click.visitorId) g.visitorIds.add(click.visitorId);
     else g.legacyVisitors++;
@@ -319,8 +355,8 @@ export class CreativeAnalyticsService {
       GroupAcc & { imageKey: string; imageLabel: string; headlineKey: string; headlineLabel: string }
     >,
     pairKey: string,
-    image: { key: string; label: string },
-    headline: { key: string; label: string },
+    image: ResolvedCreative,
+    headline: ResolvedCreative,
     click: ClickRow,
     conv: { events: number; revenue: number } | undefined,
   ) {
@@ -337,7 +373,11 @@ export class CreativeAnalyticsService {
       convertingVisits: 0,
       conversions: 0,
       revenue: 0,
+      imageUrl: image.imageUrl,
+      cta: image.cta || headline.cta,
     };
+    if (!g.imageUrl && image.imageUrl) g.imageUrl = image.imageUrl;
+    if (!g.cta && (image.cta || headline.cta)) g.cta = image.cta || headline.cta;
     g.visits++;
     if (click.visitorId) g.visitorIds.add(click.visitorId);
     else g.legacyVisitors++;
@@ -426,6 +466,8 @@ export class CreativeAnalyticsService {
       costPerEvent: 0,
       profit: g.revenue,
       quality: scoreCreativeQuality(g.visits, crNum, botNum, benchmarks),
+      imageUrl: g.imageUrl,
+      cta: g.cta,
     };
   }
 }

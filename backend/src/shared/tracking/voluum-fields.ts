@@ -48,7 +48,7 @@ export function extractVoluumFields(
   return {
     pathId: pick(q, 'path_id', 'pathid'),
     landerId: pick(q, 'lander_id', 'landerid', 'lp_id', 'lpid'),
-    landerName: pick(q, 'lander', 'lander_name', 'landername', 'lp'),
+    landerName: pick(q, 'lander', 'lander_name', 'landername', 'lp_name', 'lpname', 'lp'),
     offerId: pick(q, 'offer_id', 'offerid'),
     offerName: pick(q, 'offer', 'offer_name', 'offername'),
     affiliateNetwork: pick(q, 'affiliate_network', 'affiliatenetwork', 'network'),

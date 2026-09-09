@@ -1,7 +1,17 @@
 import { HttpService } from '@nestjs/axios';
 import { AdPlatform } from '@prisma/client';
 import { firstValueFrom } from 'rxjs';
+import { httpRequestWithRetry } from '../../postbacks/helpers/facebook-graph-http.helper';
 import type { PlatformSyncAdapter, SpendMetricRow } from '../interfaces/platform-sync.adapter';
+import {
+  parseMetaAdCreativeBatch,
+  type ParsedMetaAdCreative,
+} from '../meta-ad-creative.parse';
+
+const GRAPH_BASE = 'https://graph.facebook.com/v21.0';
+const CREATIVE_FIELDS =
+  'id,name,creative{id,name,title,body,image_url,thumbnail_url,call_to_action_type,object_story_spec,asset_feed_spec}';
+const AD_BATCH_SIZE = 50;
 
 export class FacebookSyncAdapter implements PlatformSyncAdapter {
   platform = AdPlatform.facebook;
@@ -17,7 +27,7 @@ export class FacebookSyncAdapter implements PlatformSyncAdapter {
     if (!token || !actId) return false;
     try {
       await firstValueFrom(
-        this.http.get(`https://graph.facebook.com/v21.0/${actId}`, {
+        this.http.get(`${GRAPH_BASE}/${actId}`, {
           params: { fields: 'name', access_token: token },
         }),
       );
@@ -38,7 +48,7 @@ export class FacebookSyncAdapter implements PlatformSyncAdapter {
     if (!token || !actId) return [];
 
     const { data } = await firstValueFrom(
-      this.http.get(`https://graph.facebook.com/v21.0/${actId}/insights`, {
+      this.http.get(`${GRAPH_BASE}/${actId}/insights`, {
         params: {
           fields: 'campaign_id,impressions,clicks,spend',
           level: 'campaign',
@@ -64,5 +74,30 @@ export class FacebookSyncAdapter implements PlatformSyncAdapter {
       });
     }
     return rows;
+  }
+
+  async fetchAdCreatives(
+    token: string,
+    adIds: string[],
+  ): Promise<ParsedMetaAdCreative[]> {
+    const unique = [...new Set(adIds.map((id) => id.trim()).filter(Boolean))];
+    if (!token || unique.length === 0) return [];
+
+    const out: ParsedMetaAdCreative[] = [];
+    for (let i = 0; i < unique.length; i += AD_BATCH_SIZE) {
+      const chunk = unique.slice(i, i + AD_BATCH_SIZE);
+      const qs = new URLSearchParams({
+        ids: chunk.join(','),
+        fields: CREATIVE_FIELDS,
+        access_token: token,
+      });
+      const { data } = await httpRequestWithRetry(
+        this.http,
+        'get',
+        `${GRAPH_BASE}/?${qs.toString()}`,
+      );
+      out.push(...parseMetaAdCreativeBatch(data));
+    }
+    return out;
   }
 }

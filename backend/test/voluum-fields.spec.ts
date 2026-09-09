@@ -20,6 +20,15 @@ describe('Voluum fields extraction', () => {
     expect(fields.offerId).toBe('offer-uuid');
   });
 
+  it('reads the LP script aliases lp_id / lp_name', () => {
+    const fields = extractVoluumFields({
+      lp_id: 'nexoquote-auto-us',
+      lp_name: 'Nexo Quote Auto US',
+    });
+    expect(fields.landerId).toBe('nexoquote-auto-us');
+    expect(fields.landerName).toBe('Nexo Quote Auto US');
+  });
+
   it('maps native Mediago params into CV slots when vars absent', () => {
     const cvs = applyNativeParamFallbacks({}, {
       adId: '12345',

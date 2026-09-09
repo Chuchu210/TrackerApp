@@ -19,6 +19,7 @@ import {
   ManualSpendDto,
 } from './dto/platform-sync.dto';
 import { sanitizeMediagoCredentialsForResponse } from './mediago/mediago-credentials';
+import { MetaCreativesService } from './meta-creatives.service';
 
 @Injectable()
 export class PlatformSyncService {
@@ -30,6 +31,7 @@ export class PlatformSyncService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly http: HttpService,
+    private readonly metaCreatives: MetaCreativesService,
   ) {
     this.mediagoAdapter = new MediagoSyncAdapter(this.http);
     this.openAiAdapter = new OpenAiSyncAdapter(this.http);
@@ -41,6 +43,9 @@ export class PlatformSyncService {
   @Cron('*/15 * * * *')
   async scheduledSync() {
     await this.syncAll().catch((err) => this.logger.error('Scheduled sync failed', err));
+    await this.metaCreatives.refreshRecent().catch((err) =>
+      this.logger.error('Meta creative refresh failed', err),
+    );
   }
 
   async pauseMediagoCampaign(campaignId: string) {

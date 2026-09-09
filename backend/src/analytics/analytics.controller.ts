@@ -276,6 +276,7 @@ export class AnalyticsController {
       adsetId: rest.adsetId,
       siteId: rest.siteId,
       contentName: rest.contentName,
+      landerId: rest.landerId,
       isBot: isBot === 'true' ? true : isBot === 'false' ? false : undefined,
       isNewVisitor:
         isNewVisitor === 'true' ? true : isNewVisitor === 'false' ? false : undefined,
@@ -302,6 +303,7 @@ export class AnalyticsController {
   @Get('funnel/steps')
   getFunnelSteps(
     @Query('campaignId') campaignId?: string,
+    @Query('landerId') landerId?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('includeTest') includeTest?: string,
@@ -311,6 +313,7 @@ export class AnalyticsController {
       from,
       to,
       includeTest === 'true',
+      landerId,
     );
   }
 

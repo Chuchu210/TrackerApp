@@ -41,6 +41,14 @@ export class TrackerScriptController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const query: Record<string, string> = { ...(dto.params || {}) };
+    // Script data-lp-id wins only when the URL did not already name a lander
+    // (redirect / Voluum templates keep their lander_id).
+    if (dto.lpId && !query.lander_id && !query.lp_id && !query.lpid) {
+      query.lander_id = dto.lpId;
+    }
+    if (dto.lpName && !query.lander_name && !query.lander && !query.lp && !query.lp_name) {
+      query.lander_name = dto.lpName;
+    }
     // Test-IP override (?__test_ip=) is honored inside buildVisitorContextFromRequest
     // when ALLOW_TEST_IP_OVERRIDE=true — no special handling needed here.
     const visitor = buildVisitorContextFromRequest(req, query);

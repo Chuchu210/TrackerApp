@@ -16,4 +16,14 @@ export class DirectVisitDto {
   @IsOptional()
   @IsBoolean()
   noViewContent?: boolean;
+
+  /** LP script data-lp-id — which landing page registered this visit. */
+  @IsOptional()
+  @IsString()
+  lpId?: string;
+
+  /** LP script data-lp-name — human label for the lander report. */
+  @IsOptional()
+  @IsString()
+  lpName?: string;
 }

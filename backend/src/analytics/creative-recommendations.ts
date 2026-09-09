@@ -23,6 +23,8 @@ export type CreativePerformanceRow = {
   topHeadlineCr?: string;
   topImage?: string;
   topImageCr?: string;
+  imageUrl?: string;
+  cta?: string;
 };
 
 export type CreativePairRow = CreativePerformanceRow & {

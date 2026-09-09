@@ -12,6 +12,7 @@ export function buildTrackerScriptTag(
   trackerBase: string,
   injectTracker: boolean,
   trackerAttrs?: { noViewContent?: boolean } | null,
+  lander?: { slug?: string; name?: string } | null,
 ): string | null {
   if (!injectTracker) return null;
 
@@ -21,7 +22,11 @@ export function buildTrackerScriptTag(
     trackerAttrs?.noViewContent === true ||
     (trackerAttrs?.noViewContent !== false && !shouldSendAutoViewContent(campaign.slug));
 
-  return trackerScript.getLpScriptSnippet(campaignRef, mode, trackerBase, { noViewContent });
+  return trackerScript.getLpScriptSnippet(campaignRef, mode, trackerBase, {
+    noViewContent,
+    lpId: lander?.slug,
+    lpName: lander?.name,
+  });
 }
 
 export function injectTrackerIntoHtml(html: string, scriptTag: string): string {

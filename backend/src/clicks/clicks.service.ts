@@ -384,6 +384,7 @@ export class ClicksService {
     adsetId?: string;
     siteId?: string;
     contentName?: string;
+    landerId?: string;
     isBot?: boolean;
     isNewVisitor?: boolean;
     isTest?: boolean;
@@ -408,6 +409,7 @@ export class ClicksService {
     if (filters.contentName) {
       where.contentName = { contains: filters.contentName, mode: 'insensitive' };
     }
+    if (filters.landerId) where.landerId = filters.landerId;
     if (filters.isBot !== undefined) where.isBot = filters.isBot;
     if (filters.isNewVisitor !== undefined) where.isNewVisitor = filters.isNewVisitor;
     if (filters.isTest !== undefined) where.isTest = filters.isTest;

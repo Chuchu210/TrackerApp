@@ -49,6 +49,7 @@ type Filters = {
   isNewVisitor: string;
   isTest: string;
   converted: string;
+  landerId: string;
 };
 
 const EMPTY_FILTERS: Filters = {
@@ -64,9 +65,12 @@ const EMPTY_FILTERS: Filters = {
   isNewVisitor: '',
   isTest: '',
   converted: '',
+  landerId: '',
 };
 
 const DIMENSIONS: { id: VisitBreakdownDimension; label: string }[] = [
+  { id: 'campaign', label: 'Campaign' },
+  { id: 'lander', label: 'Landing page' },
   { id: 'publisher', label: 'Publisher' },
   { id: 'adset', label: 'Adset' },
   { id: 'ad', label: 'Ad' },
@@ -75,7 +79,6 @@ const DIMENSIONS: { id: VisitBreakdownDimension; label: string }[] = [
   { id: 'platform', label: 'Platform' },
   { id: 'country', label: 'Country' },
   { id: 'device', label: 'Device' },
-  { id: 'campaign', label: 'Campaign' },
 ];
 
 type SortKey = 'visits' | 'botPct' | 'convertingVisits' | 'cr' | 'revenue';
@@ -133,6 +136,7 @@ export default function ClicksPage() {
     if (filters.adsetId) params.adsetId = filters.adsetId;
     if (filters.siteId) params.siteId = filters.siteId;
     if (filters.contentName) params.contentName = filters.contentName;
+    if (filters.landerId) params.landerId = filters.landerId;
     if (filters.isBot) params.isBot = filters.isBot;
     if (filters.isNewVisitor) params.isNewVisitor = filters.isNewVisitor;
     if (filters.isTest) params.isTest = filters.isTest;
@@ -235,6 +239,9 @@ export default function ClicksPage() {
       case 'campaign':
         next.campaignId = row.key;
         break;
+      case 'lander':
+        next.landerId = row.key === '(no lander)' ? '' : row.key;
+        break;
     }
     setFilters(next);
     setViewMode('log');
@@ -317,6 +324,12 @@ export default function ClicksPage() {
             </option>
           ))}
         </Select>
+        <Input
+          className="w-40"
+          placeholder="Landing page"
+          value={filters.landerId}
+          onChange={(e) => setFilters({ ...filters, landerId: e.target.value })}
+        />
         <Input
           className="w-32"
           placeholder="Publisher"

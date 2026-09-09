@@ -10,9 +10,10 @@ import { ProfitabilityAnalyticsService } from './profitability-analytics.service
 import { DigestService } from './digest.service';
 import { IncomingPostbacksService } from './incoming-postbacks.service';
 import { ConversionEventTypesModule } from '../conversion-event-types/conversion-event-types.module';
+import { PlatformSyncModule } from '../platform-sync/platform-sync.module';
 
 @Module({
-  imports: [ConversionEventTypesModule],
+  imports: [ConversionEventTypesModule, PlatformSyncModule],
   controllers: [AnalyticsController],
   providers: [
     AnalyticsService,

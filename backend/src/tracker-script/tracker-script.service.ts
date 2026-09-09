@@ -90,11 +90,20 @@ export class TrackerScriptService {
     return v === "" || v === "true" || v === "1";
   }
 
+  function readLp(tag) {
+    if (!tag) return { id: "", name: "" };
+    return {
+      id: tag.getAttribute("data-lp-id") || tag.getAttribute("data-lander-id") || "",
+      name: tag.getAttribute("data-lp-name") || tag.getAttribute("data-lander-name") || "",
+    };
+  }
+
   function registerDirectVisit(campaignId, tag) {
     if (!campaignId || getCid()) return;
     var params = urlParams();
     var vid = getVid();
     var noViewContent = isNoViewContent(tag);
+    var lp = readLp(tag);
     fetch(TK_BASE + "/t/visit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -104,6 +113,8 @@ export class TrackerScriptService {
         params: params,
         visitorId: vid || undefined,
         noViewContent: noViewContent || undefined,
+        lpId: lp.id || undefined,
+        lpName: lp.name || undefined,
       }),
       keepalive: true,
     })
@@ -272,13 +283,19 @@ export class TrackerScriptService {
     campaignRef: string,
     mode: 'redirect' | 'direct',
     trackerBase?: string,
-    options?: { noViewContent?: boolean },
+    options?: { noViewContent?: boolean; lpId?: string; lpName?: string },
   ): string {
     const baseUrl =
       trackerBase || this.config.get<string>('TRACKER_BASE_URL') || 'http://localhost:3001';
     let tag = `<script defer src="${baseUrl}/t/tracker.js" data-campaign="${campaignRef}" data-mode="${mode}"`;
     if (options?.noViewContent) {
       tag += ' data-no-viewcontent="true"';
+    }
+    if (options?.lpId) {
+      tag += ` data-lp-id="${options.lpId.replace(/"/g, '')}"`;
+    }
+    if (options?.lpName) {
+      tag += ` data-lp-name="${options.lpName.replace(/"/g, '')}"`;
     }
     return `${tag}></script>`;
   }

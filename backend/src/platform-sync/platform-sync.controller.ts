@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
 import { PlatformSyncService } from './platform-sync.service';
+import { MetaCreativesService } from './meta-creatives.service';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import {
   CreateCampaignMappingDto,
@@ -11,7 +12,10 @@ import {
 @Controller('api/integrations')
 @UseGuards(ApiKeyGuard)
 export class PlatformSyncController {
-  constructor(private readonly sync: PlatformSyncService) {}
+  constructor(
+    private readonly sync: PlatformSyncService,
+    private readonly metaCreatives: MetaCreativesService,
+  ) {}
 
   @Get('connections')
   listConnections() {
@@ -51,6 +55,11 @@ export class PlatformSyncController {
   @Post('connections/:id/mediago/auto-map')
   mediagoAutoMap(@Param('id') id: string) {
     return this.sync.autoMapMediagoCampaigns(id);
+  }
+
+  @Post('facebook/creatives/refresh')
+  refreshFacebookCreatives() {
+    return this.metaCreatives.refreshRecent();
   }
 
   @Post('sync')

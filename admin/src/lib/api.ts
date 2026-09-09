@@ -349,7 +349,8 @@ export type VisitBreakdownDimension =
   | 'platform'
   | 'country'
   | 'device'
-  | 'campaign';
+  | 'campaign'
+  | 'lander';
 
 export interface VisitBreakdownRow {
   key: string;
@@ -391,6 +392,8 @@ export interface CreativePerformanceRow {
   topHeadlineCr?: string;
   topImage?: string;
   topImageCr?: string;
+  imageUrl?: string;
+  cta?: string;
 }
 
 export interface CreativePairRow extends CreativePerformanceRow {
@@ -616,6 +619,30 @@ export interface FunnelReport {
   uniqueVisits: number;
   steps: FunnelStepMetrics[];
   discoveredEvents: { slug: string; count: number; uniqueVisitors: number }[];
+}
+
+export interface QuestionFunnelStep {
+  kind: 'arrival' | 'question';
+  stepIndex: number;
+  stepKey: string;
+  label: string;
+  visits: number;
+  previousReached: number;
+  leftHere: number;
+  rateFromVisitsPct: string;
+  dropOffFromPrevPct: string;
+}
+
+export interface QuestionFunnelReport {
+  visits: number;
+  steps: QuestionFunnelStep[];
+  landers: { id: string; name: string }[];
+  worstDrop: {
+    stepKey: string;
+    label: string;
+    leftHere: number;
+    dropOffFromPrevPct: string;
+  } | null;
 }
 
 export interface FunnelPostbackRow {
@@ -912,6 +939,10 @@ export const trackerApi = {
     const qs = params ? `?${new URLSearchParams(params)}` : '';
     return api<FunnelReport>(`/api/analytics/funnel${qs}`);
   },
+  getQuestionFunnel: (params?: Record<string, string>) => {
+    const qs = params ? `?${new URLSearchParams(params)}` : '';
+    return api<QuestionFunnelReport>(`/api/analytics/funnel/steps${qs}`);
+  },
   getFunnelPostbacks: (params?: Record<string, string>) => {
     const qs = params ? `?${new URLSearchParams(params)}` : '';
     return api<FunnelPostbackRow[]>(`/api/analytics/funnel/postbacks${qs}`);
@@ -1032,6 +1063,11 @@ export const trackerApi = {
       { method: 'POST' },
     ),
   syncAllPlatforms: () => api<{ synced: number }>('/api/integrations/sync', { method: 'POST' }),
+  refreshFacebookCreatives: () =>
+    api<{ fetched: number; skipped: string | null }>(
+      '/api/integrations/facebook/creatives/refresh',
+      { method: 'POST' },
+    ),
   syncPlatformConnection: (id: string) =>
     api<number>(`/api/integrations/connections/${id}/sync`, { method: 'POST' }),
   getCampaignMappings: () => api<CampaignPlatformMapping[]>('/api/integrations/mappings'),

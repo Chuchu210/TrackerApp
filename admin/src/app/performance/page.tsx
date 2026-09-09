@@ -85,6 +85,7 @@ export default function PerformancePage() {
   const [summary, setSummary] = useState<VisitSummary | null>(null);
   const [report, setReport] = useState<CreativeReport | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const params = {
@@ -132,12 +133,33 @@ export default function PerformancePage() {
       <AnalyticsTabs />
       <PageHeader
         title="Creative Performance"
-        description="Image vs headline analysis with automated recommendations. Optimize for a specific LP event — uses asset_id (image) and ad_title (headline) from your click URL."
+        description="Image vs headline analysis with automated recommendations. Native ads use asset_id + ad_title; Facebook ads pull image, headline and CTA from the Meta Marketing API by ad_id."
       />
 
       <div className="mb-4 flex flex-wrap gap-3 items-center">
         <DateRangePicker value={range} onChange={setRange} />
         <ExcludeBotsToggle value={excludeBots} onChange={setExcludeBots} />
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={refreshing}
+          onClick={() => {
+            setRefreshing(true);
+            trackerApi
+              .refreshFacebookCreatives()
+              .then((res) => {
+                if (res.skipped) {
+                  setError(res.skipped);
+                  return;
+                }
+                load();
+              })
+              .catch((err) => setError(formatApiError(err)))
+              .finally(() => setRefreshing(false));
+          }}
+        >
+          {refreshing ? 'Refreshing Meta ads…' : 'Refresh Meta creatives'}
+        </Button>
       </div>
 
       {error && (
@@ -262,12 +284,16 @@ export default function PerformancePage() {
         <DashboardTab report={report} />
       ) : tab === 'images' ? (
         <CreativeTable
-          title="Performance by image (asset_id)"
-          subtitle="Best headline shown per image when available."
+          title="Performance by image"
+          subtitle="Grouped by asset_id, or by the Meta image URL when the ad was looked up from Graph."
           metricLabel={metricLabel}
           eventCountLabel={eventCountLabel}
           rows={report.images}
           extraColumns={[
+            {
+              header: 'CTA',
+              render: (r) => r.cta || '—',
+            },
             {
               header: 'Best headline',
               render: (r) =>
@@ -285,8 +311,8 @@ export default function PerformancePage() {
         />
       ) : tab === 'headlines' ? (
         <CreativeTable
-          title="Performance by headline (ad_title)"
-          subtitle="Best image shown per headline when available."
+          title="Performance by headline"
+          subtitle="Uses the Meta headline when cached, otherwise ad_title / ad name from the click URL."
           metricLabel={metricLabel}
           eventCountLabel={eventCountLabel}
           rows={report.headlines}
@@ -370,11 +396,15 @@ function TopList({
       ) : (
         <ul className="space-y-2">
           {rows.map((r) => (
-            <li key={r.key} className="text-xs flex justify-between gap-2">
-              <span className={`truncate text-zinc-700 dark:text-zinc-300`} title={r.label}>
-                {isCombo && 'headlineLabel' in r
-                  ? `${(r as CreativePairRow).imageLabel} + ${(r as CreativePairRow).headlineLabel}`
-                  : r.label}
+            <li key={r.key} className="text-xs flex items-center justify-between gap-2">
+              <span className="min-w-0 flex-1">
+                <CreativeLabel
+                  row={
+                    isCombo && 'headlineLabel' in r
+                      ? { ...r, label: `${(r as CreativePairRow).imageLabel} + ${(r as CreativePairRow).headlineLabel}` }
+                      : r
+                  }
+                />
               </span>
               <span className="shrink-0 font-mono text-zinc-500">{r.cr}%</span>
             </li>
@@ -382,6 +412,27 @@ function TopList({
         </ul>
       )}
     </Card>
+  );
+}
+
+function CreativeLabel({ row }: { row: Pick<CreativePerformanceRow, 'label' | 'imageUrl' | 'cta'> }) {
+  return (
+    <span className="inline-flex items-center gap-2 min-w-0">
+      {row.imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={row.imageUrl}
+          alt=""
+          className="h-8 w-8 rounded object-cover shrink-0 bg-zinc-100 dark:bg-zinc-800"
+        />
+      ) : null}
+      <span className="min-w-0">
+        <span className="block truncate" title={row.label}>
+          {row.label}
+        </span>
+        {row.cta ? <span className={`block truncate ${mutedTextClass}`}>{row.cta}</span> : null}
+      </span>
+    </span>
   );
 }
 
@@ -423,8 +474,8 @@ function CreativeTable({
           <tbody>
             {rows.map((r) => (
               <tr key={r.key} className={tableRowClass}>
-                <Td className="max-w-[200px] truncate font-medium">
-                  <span title={r.label}>{r.label}</span>
+                <Td className="max-w-[240px] font-medium">
+                  <CreativeLabel row={r} />
                 </Td>
                 {extraColumns?.map((c) => (
                   <Td key={c.header} className="max-w-[160px] truncate">
@@ -475,8 +526,9 @@ function ComboTable({
       <DataTable>
         <table className="w-full text-xs">
           <TableHead>
-            <Th>Image (asset)</Th>
+            <Th>Image</Th>
             <Th>Headline</Th>
+            <Th>CTA</Th>
             <Th>Visits</Th>
             <Th>{eventCountLabel}s</Th>
             <Th>{metricLabel}</Th>
@@ -490,12 +542,13 @@ function ComboTable({
           <tbody>
             {pairs.map((r) => (
               <tr key={r.key} className={tableRowClass}>
-                <Td className="max-w-[140px] truncate">
-                  <span title={r.imageLabel}>{r.imageLabel}</span>
+                <Td className="max-w-[160px]">
+                  <CreativeLabel row={{ label: r.imageLabel, imageUrl: r.imageUrl }} />
                 </Td>
                 <Td className="max-w-[200px] truncate">
                   <span title={r.headlineLabel}>{r.headlineLabel}</span>
                 </Td>
+                <Td className="max-w-[100px] truncate">{r.cta || '—'}</Td>
                 <Td>{r.visits}</Td>
                 <Td>{r.conversions}</Td>
                 <Td>{r.cr}%</Td>

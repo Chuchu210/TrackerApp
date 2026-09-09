@@ -50,7 +50,11 @@ describe('CreativeAnalyticsService', () => {
     },
   };
 
-  const service = new CreativeAnalyticsService(prisma as never);
+  const metaCreatives = {
+    getByAdIds: jest.fn().mockResolvedValue(new Map()),
+  };
+
+  const service = new CreativeAnalyticsService(prisma as never, metaCreatives as never);
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -106,5 +110,45 @@ describe('CreativeAnalyticsService', () => {
     expect(report.benchmarks.avgCpv).toBe(50);
     expect(report.images.find((r) => r.key === 'img-a')?.spend).toBe(50);
     expect(report.images.find((r) => r.key === 'img-b')?.spend).toBe(50);
+  });
+
+  it('uses cached Meta image / headline / CTA when the click only has ad_id', async () => {
+    prisma.click.findMany.mockResolvedValueOnce([
+      {
+        clickId: 'fb-1',
+        campaignId: 'camp-1',
+        assetId: null,
+        contentName: null,
+        adId: '23851234567890789',
+        adTitle: 'img3_titleB_ctaDecouvrir',
+        isBot: false,
+        visitorId: 'v-fb',
+      },
+    ]);
+    metaCreatives.getByAdIds.mockResolvedValueOnce(
+      new Map([
+        [
+          '23851234567890789',
+          {
+            adId: '23851234567890789',
+            adName: 'img3_titleB_ctaDecouvrir',
+            headline: 'Découvrez notre offre',
+            cta: 'Learn More',
+            imageUrl: 'https://cdn.example/ad.jpg',
+            thumbnailUrl: 'https://cdn.example/ad-thumb.jpg',
+          },
+        ],
+      ]),
+    );
+
+    const report = await service.getCreativeReport(
+      { from: '2026-06-01T00:00:00.000Z', to: '2026-06-02T00:00:00.000Z' },
+      { eventType: 'call_click', countMode: 'recorded' },
+    );
+
+    expect(report.images[0]?.label).toBe('img3_titleB_ctaDecouvrir');
+    expect(report.images[0]?.imageUrl).toBe('https://cdn.example/ad-thumb.jpg');
+    expect(report.images[0]?.cta).toBe('Learn More');
+    expect(report.headlines[0]?.label).toBe('Découvrez notre offre');
   });
 });

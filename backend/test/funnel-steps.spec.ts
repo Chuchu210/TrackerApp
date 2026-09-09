@@ -72,7 +72,7 @@ describe('FunnelStepsService.record', () => {
 
 describe('FunnelStepsService.getStepFunnel', () => {
   const prisma = {
-    click: { count: jest.fn() },
+    click: { count: jest.fn(), findMany: jest.fn() },
     funnelStepEvent: { groupBy: jest.fn(), findMany: jest.fn() },
   };
   const settings = { isTestMode: jest.fn() };
@@ -81,6 +81,9 @@ describe('FunnelStepsService.getStepFunnel', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.click.count.mockResolvedValue(200);
+    prisma.click.findMany.mockResolvedValue([
+      { landerId: 'nexoquote-auto-us', landerName: 'Nexo Quote Auto US' },
+    ]);
     prisma.funnelStepEvent.groupBy.mockResolvedValue([
       { stepIndex: 1, stepKey: 'q1', _count: { _all: 100 } },
       { stepIndex: 2, stepKey: 'q2', _count: { _all: 60 } },
@@ -96,28 +99,64 @@ describe('FunnelStepsService.getStepFunnel', () => {
     const res = await service.getStepFunnel('camp-1');
 
     expect(res.visits).toBe(200);
-    expect(res.steps).toHaveLength(3);
+    expect(res.steps).toHaveLength(4);
+
+    expect(res.steps[0]).toMatchObject({
+      kind: 'arrival',
+      stepKey: 'lp_arrival',
+      visits: 200,
+      leftHere: 0,
+      rateFromVisitsPct: '100.0',
+    });
 
     // 100 of 200 arrivals reached q1 — half the traffic is lost before the
     // first question, which is exactly what we want to see.
-    expect(res.steps[0]).toMatchObject({
+    expect(res.steps[1]).toMatchObject({
+      kind: 'question',
       stepKey: 'q1',
       label: 'Question 1',
       visits: 100,
+      previousReached: 200,
+      leftHere: 100,
       rateFromVisitsPct: '50.0',
       dropOffFromPrevPct: '50.0',
     });
 
     // q1 -> q2 loses 40 of 100.
-    expect(res.steps[1]).toMatchObject({
+    expect(res.steps[2]).toMatchObject({
       stepKey: 'q2',
       visits: 60,
+      previousReached: 100,
+      leftHere: 40,
       rateFromVisitsPct: '30.0',
       dropOffFromPrevPct: '40.0',
     });
 
     // No stored label for q3: fall back to the key rather than showing nothing.
-    expect(res.steps[2].label).toBe('q3');
+    expect(res.steps[3].label).toBe('q3');
+    expect(res.worstDrop).toMatchObject({
+      stepKey: 'q1',
+      leftHere: 100,
+      dropOffFromPrevPct: '50.0',
+    });
+    expect(res.landers).toEqual([
+      { id: 'nexoquote-auto-us', name: 'Nexo Quote Auto US' },
+    ]);
+  });
+
+  it('scopes steps to one lander via the click relation', async () => {
+    await service.getStepFunnel('camp-1', undefined, undefined, false, 'nexoquote-auto-us');
+    expect(prisma.click.count).toHaveBeenCalledWith({
+      where: expect.objectContaining({ campaignId: 'camp-1', landerId: 'nexoquote-auto-us' }),
+    });
+    expect(prisma.funnelStepEvent.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          campaignId: 'camp-1',
+          click: { is: { landerId: 'nexoquote-auto-us' } },
+        }),
+      }),
+    );
   });
 
   it('scopes to one campaign', async () => {
@@ -137,6 +176,7 @@ describe('FunnelStepsService.getStepFunnel', () => {
 
     jest.clearAllMocks();
     prisma.click.count.mockResolvedValue(0);
+    prisma.click.findMany.mockResolvedValue([]);
     prisma.funnelStepEvent.groupBy.mockResolvedValue([]);
     await service.getStepFunnel('camp-1', undefined, undefined, true);
     const where = prisma.funnelStepEvent.groupBy.mock.calls[0][0].where;
@@ -151,7 +191,9 @@ describe('FunnelStepsService.getStepFunnel', () => {
     prisma.funnelStepEvent.findMany.mockResolvedValue([]);
 
     const res = await service.getStepFunnel('camp-1');
-    expect(res.steps[0].rateFromVisitsPct).toBe('0.0');
-    expect(res.steps[0].dropOffFromPrevPct).toBe('0.0');
+    expect(res.steps[0].kind).toBe('arrival');
+    expect(res.steps[1].rateFromVisitsPct).toBe('0.0');
+    expect(res.steps[1].dropOffFromPrevPct).toBe('0.0');
+    expect(res.worstDrop).toBeNull();
   });
 });

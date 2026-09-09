@@ -288,6 +288,10 @@ export class CampaignsService {
       campaignRef,
       mode,
       trackerBase,
+      {
+        lpId: typeof campaign.landerId === 'string' ? campaign.landerId : undefined,
+        lpName: typeof campaign.landerName === 'string' ? campaign.landerName : undefined,
+      },
     );
 
     let trackingTemplate = campaign.destinationUrl;

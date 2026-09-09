@@ -20,6 +20,7 @@ export class CampaignsClicksController {
     @Query('adsetId') adsetId?: string,
     @Query('siteId') siteId?: string,
     @Query('contentName') contentName?: string,
+    @Query('landerId') landerId?: string,
     @Query('isBot') isBot?: string,
     @Query('isNewVisitor') isNewVisitor?: string,
     @Query('isTest') isTest?: string,
@@ -39,6 +40,7 @@ export class CampaignsClicksController {
       adsetId,
       siteId,
       contentName,
+      landerId,
       isBot: isBot === 'true' ? true : isBot === 'false' ? false : undefined,
       isNewVisitor:
         isNewVisitor === 'true' ? true : isNewVisitor === 'false' ? false : undefined,

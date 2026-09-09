@@ -233,6 +233,8 @@ export class AnalyticsService {
         visitorId: true,
         isNewVisitor: true,
         campaignId: true,
+        landerId: true,
+        landerName: true,
         campaign: { select: { name: true } },
       },
     });
@@ -337,6 +339,8 @@ export class AnalyticsService {
       countryCode: string | null;
       device: string | null;
       campaignId: string;
+      landerId?: string | null;
+      landerName?: string | null;
       campaign: { name: string };
     },
   ): { key: string; label: string } {
@@ -381,6 +385,13 @@ export class AnalyticsService {
       }
       case 'campaign': {
         return { key: click.campaignId, label: click.campaign.name };
+      }
+      case 'lander': {
+        const key = click.landerId || '(no lander)';
+        const label = click.landerName
+          ? `${click.landerName}${click.landerId ? ` (${click.landerId})` : ''}`
+          : key;
+        return { key, label };
       }
       default: {
         const label = click.publisherName || '(unknown)';

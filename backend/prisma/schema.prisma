@@ -835,3 +835,23 @@ model OfferClick {
   @@index([offerId])
   @@map("offer_clicks")
 }
+
+/// Cached Marketing API lookup for a Meta ad. Clicks only store ad_id / ad_name;
+/// image URL, headline and CTA have to be fetched from Graph and reused so
+/// creative reports can show the actual asset instead of a bare numeric id.
+model MetaAdCreative {
+  id           String   @id @default(uuid())
+  adId         String   @unique @map("ad_id")
+  adName       String?  @map("ad_name")
+  headline     String?
+  body         String?
+  cta          String?
+  imageUrl     String?  @map("image_url")
+  thumbnailUrl String?  @map("thumbnail_url")
+  fetchedAt    DateTime @map("fetched_at")
+  lastError    String?  @map("last_error")
+  raw          Json?
+
+  @@index([fetchedAt])
+  @@map("meta_ad_creatives")
+}

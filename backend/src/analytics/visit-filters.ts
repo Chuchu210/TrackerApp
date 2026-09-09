@@ -15,6 +15,7 @@ export type VisitAnalyticsFilters = {
   adsetId?: string;
   siteId?: string;
   contentName?: string;
+  landerId?: string;
   isBot?: boolean;
   isNewVisitor?: boolean;
   excludeBots?: boolean;
@@ -42,6 +43,7 @@ export function buildClickWhere(filters: VisitAnalyticsFilters): Prisma.ClickWhe
   if (filters.contentName) {
     where.contentName = { contains: filters.contentName, mode: 'insensitive' };
   }
+  if (filters.landerId) where.landerId = filters.landerId;
   if (filters.excludeBots) {
     where.isBot = false;
   } else if (filters.isBot !== undefined) {
@@ -68,4 +70,5 @@ export type VisitBreakdownDimension =
   | 'platform'
   | 'country'
   | 'device'
-  | 'campaign';
+  | 'campaign'
+  | 'lander';
