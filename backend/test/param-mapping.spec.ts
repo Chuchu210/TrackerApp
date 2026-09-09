@@ -169,4 +169,17 @@ describe('getReportFieldsFromClick', () => {
     expect(rows.some((r) => r.label === 'Ad id' && r.value === '99')).toBe(true);
     expect(rows.some((r) => r.label === 'Publisher Name' && r.value === 'Pub')).toBe(true);
   });
+
+  it('surfaces adset columns when they are populated', () => {
+    const rows = getReportFieldsFromClick(
+      {
+        adsetId: '23851234567890456',
+        adsetName: 'FR-55plus-broad',
+        adId: '23851234567890789',
+      },
+      DEFAULT_PARAM_MAPPINGS,
+    );
+    expect(rows.some((r) => r.label === 'Adset id' && r.value === '23851234567890456')).toBe(true);
+    expect(rows.some((r) => r.label === 'Adset' && r.value === 'FR-55plus-broad')).toBe(true);
+  });
 });

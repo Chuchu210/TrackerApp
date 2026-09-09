@@ -162,6 +162,7 @@ export default function ConversionsPage() {
                                 <Detail key={f.label} label={f.label} value={f.value} />
                               ))
                             : [
+                                <Detail key="adset" label="Adset" value={click.adsetName || click.adsetId} />,
                                 <Detail key="ad" label="Ad ID" value={click.adId} />,
                                 <Detail key="plat" label="Platform" value={click.platform} />,
                                 <Detail key="pub" label="Publisher" value={click.publisherName} />,

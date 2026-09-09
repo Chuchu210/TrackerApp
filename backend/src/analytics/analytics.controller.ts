@@ -273,6 +273,7 @@ export class AnalyticsController {
       country: rest.country,
       device: rest.device,
       adId: rest.adId,
+      adsetId: rest.adsetId,
       siteId: rest.siteId,
       contentName: rest.contentName,
       isBot: isBot === 'true' ? true : isBot === 'false' ? false : undefined,

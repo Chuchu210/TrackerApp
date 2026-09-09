@@ -12,6 +12,7 @@ export type VisitAnalyticsFilters = {
   country?: string;
   device?: string;
   adId?: string;
+  adsetId?: string;
   siteId?: string;
   contentName?: string;
   isBot?: boolean;
@@ -36,6 +37,7 @@ export function buildClickWhere(filters: VisitAnalyticsFilters): Prisma.ClickWhe
   if (filters.device) where.device = filters.device;
   if (filters.country) where.countryCode = filters.country;
   if (filters.adId) where.adId = { contains: filters.adId, mode: 'insensitive' };
+  if (filters.adsetId) where.adsetId = { contains: filters.adsetId, mode: 'insensitive' };
   if (filters.siteId) where.siteId = { contains: filters.siteId, mode: 'insensitive' };
   if (filters.contentName) {
     where.contentName = { contains: filters.contentName, mode: 'insensitive' };
@@ -59,6 +61,7 @@ export function buildClickWhere(filters: VisitAnalyticsFilters): Prisma.ClickWhe
 
 export type VisitBreakdownDimension =
   | 'publisher'
+  | 'adset'
   | 'ad'
   | 'site'
   | 'content'

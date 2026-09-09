@@ -10,4 +10,9 @@ describe('excludeBots filter', () => {
     const where = buildClickWhere({ isBot: true });
     expect(where.isBot).toBe(true);
   });
+
+  it('filters by adset id when provided', () => {
+    const where = buildClickWhere({ adsetId: '2385' });
+    expect(where.adsetId).toEqual({ contains: '2385', mode: 'insensitive' });
+  });
 });

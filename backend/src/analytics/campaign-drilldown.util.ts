@@ -13,6 +13,9 @@ export type DrilldownDimensionId =
   | 'paths'
   | 'affiliate_networks'
   | 'conversions'
+  | 'ad_campaigns'
+  | 'adsets'
+  | 'ads'
   | 'country'
   | 'ip'
   | 'devices'
@@ -63,6 +66,14 @@ export const DRILLDOWN_DIMENSIONS: DrilldownDimensionDef[] = [
     nameColumnLabel: 'Event type',
     tab: true,
   },
+  {
+    id: 'ad_campaigns',
+    label: 'Ad campaigns',
+    nameColumnLabel: 'Ad campaign',
+    tab: true,
+  },
+  { id: 'adsets', label: 'Adsets', nameColumnLabel: 'Adset', tab: true },
+  { id: 'ads', label: 'Ads', nameColumnLabel: 'Ad', tab: true },
   { id: 'country', label: 'Country', nameColumnLabel: 'Country', tab: true },
   { id: 'ip', label: 'IP', nameColumnLabel: 'IP', tab: true },
   { id: 'devices', label: 'Devices', nameColumnLabel: 'Device', tab: true },
@@ -125,6 +136,11 @@ export type DrilldownClick = {
   customVariable10?: string | null;
   visitorId?: string | null;
   isBot?: boolean;
+  campaignExternalId?: string | null;
+  adsetId?: string | null;
+  adsetName?: string | null;
+  adId?: string | null;
+  adTitle?: string | null;
 };
 
 export type DrilldownConversion = {
@@ -181,6 +197,12 @@ export function clickGroupForDimension(
       return groupFromValue(click.pathId);
     case 'affiliate_networks':
       return groupFromIdName(click.affiliateNetworkId, click.affiliateNetwork);
+    case 'ad_campaigns':
+      return groupFromValue(click.campaignExternalId);
+    case 'adsets':
+      return groupFromIdName(click.adsetId, click.adsetName);
+    case 'ads':
+      return groupFromIdName(click.adId, click.adTitle);
     case 'country':
       return groupFromValue(click.countryCode || click.country);
     case 'ip':

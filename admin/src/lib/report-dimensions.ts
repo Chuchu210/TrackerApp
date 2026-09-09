@@ -4,6 +4,9 @@ export type ReportDimensionId =
   | 'paths'
   | 'affiliate_networks'
   | 'conversions'
+  | 'ad_campaigns'
+  | 'adsets'
+  | 'ads'
   | 'country'
   | 'ip'
   | 'devices'
@@ -54,6 +57,14 @@ export const REPORT_DIMENSIONS: ReportDimensionDef[] = [
     nameColumnLabel: 'Event type',
     tab: true,
   },
+  {
+    id: 'ad_campaigns',
+    label: 'Ad campaigns',
+    nameColumnLabel: 'Ad campaign',
+    tab: true,
+  },
+  { id: 'adsets', label: 'Adsets', nameColumnLabel: 'Adset', tab: true },
+  { id: 'ads', label: 'Ads', nameColumnLabel: 'Ad', tab: true },
   { id: 'country', label: 'Country', nameColumnLabel: 'Country', tab: true },
   { id: 'ip', label: 'IP', nameColumnLabel: 'IP', tab: true },
   { id: 'devices', label: 'Devices', nameColumnLabel: 'Device', tab: true },

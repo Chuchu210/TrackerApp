@@ -222,6 +222,8 @@ export class AnalyticsService {
         publisherName: true,
         adId: true,
         adTitle: true,
+        adsetId: true,
+        adsetName: true,
         siteId: true,
         contentName: true,
         platform: true,
@@ -327,6 +329,8 @@ export class AnalyticsService {
       publisherName: string | null;
       adId: string | null;
       adTitle: string | null;
+      adsetId: string | null;
+      adsetName: string | null;
       siteId: string | null;
       contentName: string | null;
       platform: string | null;
@@ -340,6 +344,13 @@ export class AnalyticsService {
       case 'publisher': {
         const label = click.publisherName || '(unknown)';
         return { key: label, label };
+      }
+      case 'adset': {
+        const key = click.adsetId || '(no adset)';
+        const label = click.adsetName
+          ? `${click.adsetName}${click.adsetId ? ` (${click.adsetId})` : ''}`
+          : key;
+        return { key, label };
       }
       case 'ad': {
         const key = click.adId || '(no ad)';

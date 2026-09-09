@@ -140,6 +140,8 @@ export interface Click {
   fbclid?: string;
   adId?: string;
   adTitle?: string;
+  adsetId?: string;
+  adsetName?: string;
   campaignExternalId?: string;
   publisherName?: string;
   siteId?: string;
@@ -340,6 +342,7 @@ export interface VisitSummary {
 
 export type VisitBreakdownDimension =
   | 'publisher'
+  | 'adset'
   | 'ad'
   | 'site'
   | 'content'

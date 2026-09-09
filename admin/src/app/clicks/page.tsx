@@ -42,6 +42,7 @@ type Filters = {
   platform: string;
   country: string;
   adId: string;
+  adsetId: string;
   siteId: string;
   contentName: string;
   isBot: string;
@@ -56,6 +57,7 @@ const EMPTY_FILTERS: Filters = {
   platform: '',
   country: '',
   adId: '',
+  adsetId: '',
   siteId: '',
   contentName: '',
   isBot: '',
@@ -66,6 +68,7 @@ const EMPTY_FILTERS: Filters = {
 
 const DIMENSIONS: { id: VisitBreakdownDimension; label: string }[] = [
   { id: 'publisher', label: 'Publisher' },
+  { id: 'adset', label: 'Adset' },
   { id: 'ad', label: 'Ad' },
   { id: 'site', label: 'Site' },
   { id: 'content', label: 'Content' },
@@ -106,6 +109,7 @@ export default function ClicksPage() {
       'platform',
       'country',
       'adId',
+      'adsetId',
       'contentName',
     ];
     const seed: Partial<Filters> = {};
@@ -126,6 +130,7 @@ export default function ClicksPage() {
     if (filters.platform) params.platform = filters.platform;
     if (filters.country) params.country = filters.country;
     if (filters.adId) params.adId = filters.adId;
+    if (filters.adsetId) params.adsetId = filters.adsetId;
     if (filters.siteId) params.siteId = filters.siteId;
     if (filters.contentName) params.contentName = filters.contentName;
     if (filters.isBot) params.isBot = filters.isBot;
@@ -206,6 +211,9 @@ export default function ClicksPage() {
     switch (dimension) {
       case 'publisher':
         next.publisher = row.key === '(unknown)' ? '' : row.key;
+        break;
+      case 'adset':
+        next.adsetId = row.key === '(no adset)' ? '' : row.key;
         break;
       case 'ad':
         next.adId = row.key === '(no ad)' ? '' : row.key;
@@ -317,6 +325,12 @@ export default function ClicksPage() {
         />
         <Input
           className="w-28"
+          placeholder="Adset ID"
+          value={filters.adsetId}
+          onChange={(e) => setFilters({ ...filters, adsetId: e.target.value })}
+        />
+        <Input
+          className="w-28"
           placeholder="Ad ID"
           value={filters.adId}
           onChange={(e) => setFilters({ ...filters, adId: e.target.value })}
@@ -377,6 +391,7 @@ export default function ClicksPage() {
         </Select>
         {(filters.publisher ||
           filters.adId ||
+          filters.adsetId ||
           filters.siteId ||
           filters.platform ||
           filters.country ||
@@ -483,6 +498,7 @@ export default function ClicksPage() {
               <Th>Conv</Th>
               <Th>Click ID</Th>
               <Th>Publisher</Th>
+              <Th>Adset</Th>
               <Th>Ad</Th>
               <Th>Site</Th>
               <Th>Device</Th>
@@ -527,6 +543,11 @@ export default function ClicksPage() {
                       </Td>
                       <Td className="font-mono">{c.clickId}</Td>
                       <Td className="max-w-[100px] truncate">{c.publisherName || '—'}</Td>
+                      <Td className="max-w-[120px] truncate">
+                        <span title={c.adsetName || c.adsetId || undefined}>
+                          {c.adsetName || c.adsetId || '—'}
+                        </span>
+                      </Td>
                       <Td className="max-w-[100px] truncate">
                         <span title={c.adTitle || c.adId || undefined}>{c.adId || '—'}</span>
                       </Td>
@@ -543,7 +564,7 @@ export default function ClicksPage() {
                     </tr>
                     {isExpanded && (
                       <tr className={detailRowClass}>
-                        <td colSpan={11} className="px-5 py-4">
+                        <td colSpan={12} className="px-5 py-4">
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                             {(c.reportFields?.length
                               ? c.reportFields.map((f) => (
@@ -552,9 +573,11 @@ export default function ClicksPage() {
                               : [
                                   <Detail key="tid" label="Tracking ID" value={c.trackingId} />,
                                   <Detail key="pub" label="Publisher" value={c.publisherName} />,
+                                  <Detail key="adset" label="Adset" value={c.adsetName || c.adsetId} />,
                                   <Detail key="ad" label="Ad ID" value={c.adId} />,
                                   <Detail key="plat" label="Platform" value={c.platform} />,
                                 ])}
+                            <Detail label="Adset" value={c.adsetName || c.adsetId} />
                             <Detail label="Ad title" value={c.adTitle} />
                             <Detail label="Site ID" value={c.siteId} />
                             <Detail label="Content" value={c.contentName} />

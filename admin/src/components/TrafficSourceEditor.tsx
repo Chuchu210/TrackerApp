@@ -17,6 +17,8 @@ const CANONICAL_FIELDS = [
   'fbclid',
   'ad_id',
   'ad_title',
+  'adset_id',
+  'adset_name',
   'campaign_external_id',
   'publisher_name',
   'site_id',
