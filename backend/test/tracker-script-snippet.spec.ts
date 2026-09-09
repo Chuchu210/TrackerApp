@@ -29,4 +29,12 @@ describe('TrackerScriptService.getScript', () => {
     expect(js).toContain('lpId');
     expect(js).toContain('lpName');
   });
+
+  it('queues steps and conversions until the visit returns a cid', () => {
+    const js = service.getScript();
+    expect(js).toContain('function whenCidReady');
+    expect(js).toContain('function flushPending');
+    expect(js).toContain('whenCidReady(function ()');
+    expect(js).not.toContain('credentials: "include"');
+  });
 });

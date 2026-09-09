@@ -25,7 +25,7 @@ export class TrackerScriptController {
 
   @Get('tracker.js')
   @Header('Content-Type', 'application/javascript')
-  @Header('Cache-Control', 'public, max-age=3600')
+  @Header('Cache-Control', 'public, max-age=60, must-revalidate')
   @Header('Access-Control-Allow-Origin', '*')
   getTrackerScript() {
     return this.trackerScript.getScript();

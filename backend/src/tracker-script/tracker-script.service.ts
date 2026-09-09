@@ -20,6 +20,8 @@ export class TrackerScriptService {
     return TK_BASE_FALLBACK;
   }
 
+  var pending = [];
+
   function getCid() {
     var m = d.cookie.match(/(^| )tk-cid=([^;]+)/);
     if (m) return m[2];
@@ -28,12 +30,31 @@ export class TrackerScriptService {
     return null;
   }
 
+  function flushPending() {
+    if (!getCid() || !pending.length) return;
+    var jobs = pending;
+    pending = [];
+    for (var i = 0; i < jobs.length; i++) {
+      try { jobs[i](); } catch (e) {}
+    }
+  }
+
+  function whenCidReady(fn) {
+    if (getCid()) {
+      fn();
+      return;
+    }
+    if (pending.length >= 50) return;
+    pending.push(fn);
+  }
+
   function saveCid(cid) {
     var h = new Date();
     h.setTime(h.getTime() + 86400000);
     d.cookie = "tk-cid=" + cid + "; " + secure + "samesite=Strict; expires=" + h.toUTCString() + "; path=/";
     g.setItem("tk-cid", cid);
     g.setItem("tk-cid-expires", h.getTime());
+    flushPending();
   }
 
   function getVid() {
@@ -107,7 +128,6 @@ export class TrackerScriptService {
     fetch(TK_BASE + "/t/visit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      credentials: "include",
       body: JSON.stringify({
         campaign: campaignId,
         params: params,
@@ -139,36 +159,38 @@ export class TrackerScriptService {
 
   function trackConversion(eventType, meta) {
     meta = meta || {};
-    var cid = getCid();
-    if (!cid) return;
-    // Meta pixel cookies drive Conversions API match quality. Copy rather than
-    // mutate: the caller's object is also queued in tkCallback.state.
-    var metadata = {};
-    for (var k in meta) {
-      if (Object.prototype.hasOwnProperty.call(meta, k)) metadata[k] = meta[k];
-    }
-    if (!metadata.fbp) {
-      var fbp = readCookie("_fbp");
-      if (fbp) metadata.fbp = fbp;
-    }
-    if (!metadata.fbc) {
-      var fbc = readCookie("_fbc");
-      if (fbc) metadata.fbc = fbc;
-    }
-    var body = {
-      clickId: cid,
-      eventType: eventType || meta.eventType || meta.et || meta.event || "lead",
-      metadata: metadata,
-    };
-    if (meta.payout != null) body.revenue = Number(meta.payout);
-    else if (meta.revenue != null) body.revenue = Number(meta.revenue);
-    if (meta.transactionId || meta.txid) body.transactionId = meta.transactionId || meta.txid;
-    fetch(TK_BASE + "/conversions/track", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      keepalive: true,
-    }).catch(function () {});
+    whenCidReady(function () {
+      var cid = getCid();
+      if (!cid) return;
+      // Meta pixel cookies drive Conversions API match quality. Copy rather than
+      // mutate: the caller's object is also queued in tkCallback.state.
+      var metadata = {};
+      for (var k in meta) {
+        if (Object.prototype.hasOwnProperty.call(meta, k)) metadata[k] = meta[k];
+      }
+      if (!metadata.fbp) {
+        var fbp = readCookie("_fbp");
+        if (fbp) metadata.fbp = fbp;
+      }
+      if (!metadata.fbc) {
+        var fbc = readCookie("_fbc");
+        if (fbc) metadata.fbc = fbc;
+      }
+      var body = {
+        clickId: cid,
+        eventType: eventType || meta.eventType || meta.et || meta.event || "lead",
+        metadata: metadata,
+      };
+      if (meta.payout != null) body.revenue = Number(meta.payout);
+      else if (meta.revenue != null) body.revenue = Number(meta.revenue);
+      if (meta.transactionId || meta.txid) body.transactionId = meta.transactionId || meta.txid;
+      fetch(TK_BASE + "/conversions/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        keepalive: true,
+      }).catch(function () {});
+    });
   }
 
   function isFacebookSource(params) {
@@ -200,32 +222,34 @@ export class TrackerScriptService {
    *   tkCallback.trackStep({ index: 2, key: "q2", label: "Budget" })
    */
   w.tkCallback.trackStep = function (step, label) {
-    var cid = getCid();
-    if (!cid) return;
-    var index, key, text;
-    if (step && typeof step === "object") {
-      index = step.index != null ? step.index : step.stepIndex;
-      key = step.key || step.stepKey;
-      text = step.label || step.stepLabel;
-    } else {
-      index = step;
-      text = label;
-    }
-    if (index == null && !key) return;
-    var n = parseInt(index, 10);
-    if (isNaN(n)) n = 0;
-    if (!key) key = "step_" + n;
-    fetch(TK_BASE + "/t/step", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        clickId: cid,
-        stepIndex: n,
-        stepKey: String(key),
-        stepLabel: text ? String(text) : undefined,
-      }),
-      keepalive: true,
-    }).catch(function () {});
+    whenCidReady(function () {
+      var cid = getCid();
+      if (!cid) return;
+      var index, key, text;
+      if (step && typeof step === "object") {
+        index = step.index != null ? step.index : step.stepIndex;
+        key = step.key || step.stepKey;
+        text = step.label || step.stepLabel;
+      } else {
+        index = step;
+        text = label;
+      }
+      if (index == null && !key) return;
+      var n = parseInt(index, 10);
+      if (isNaN(n)) n = 0;
+      if (!key) key = "step_" + n;
+      fetch(TK_BASE + "/t/step", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clickId: cid,
+          stepIndex: n,
+          stepKey: String(key),
+          stepLabel: text ? String(text) : undefined,
+        }),
+        keepalive: true,
+      }).catch(function () {});
+    });
   };
 
   w.tkCallback.registerConversion = function (meta) {
