@@ -137,6 +137,7 @@ export type DrilldownClick = {
   visitorId?: string | null;
   isBot?: boolean;
   campaignExternalId?: string | null;
+  utmCampaign?: string | null;
   adsetId?: string | null;
   adsetName?: string | null;
   adId?: string | null;
@@ -198,7 +199,7 @@ export function clickGroupForDimension(
     case 'affiliate_networks':
       return groupFromIdName(click.affiliateNetworkId, click.affiliateNetwork);
     case 'ad_campaigns':
-      return groupFromValue(click.campaignExternalId);
+      return groupFromIdName(click.campaignExternalId, click.utmCampaign);
     case 'adsets':
       return groupFromIdName(click.adsetId, click.adsetName);
     case 'ads':

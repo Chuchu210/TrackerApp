@@ -11,6 +11,7 @@ import {
   getDrilldownDimension,
   type DrilldownDimensionId,
 } from './campaign-drilldown.util';
+import { attributedCampaignClickWhere } from '../shared/tracking/traffic-source-from-query';
 
 export type CampaignReportRow = {
   campaignId: string;
@@ -96,15 +97,13 @@ export class CampaignReportService {
     return { fromDate, toDate };
   }
 
-  private clickWhere(
-    campaignId?: string,
+  private clickBase(
     from?: string,
     to?: string,
     excludeBots?: boolean,
   ): Prisma.ClickWhereInput {
     const { fromDate, toDate } = this.parseRange(from, to);
     return {
-      ...(campaignId ? { campaignId } : {}),
       createdAt: { gte: fromDate, lte: toDate },
       ...(excludeBots ? { isBot: false } : {}),
       // Test rows never reach a report. This is the campaign table everyone
@@ -112,6 +111,46 @@ export class CampaignReportService {
       // show up.
       isTest: false,
     };
+  }
+
+  private clickWhere(
+    campaignId?: string,
+    from?: string,
+    to?: string,
+    excludeBots?: boolean,
+  ): Prisma.ClickWhereInput {
+    return {
+      ...this.clickBase(from, to, excludeBots),
+      ...(campaignId ? { campaignId } : {}),
+    };
+  }
+
+  private reportClickWhere(
+    campaign: {
+      id: string;
+      trafficSource: string;
+      destinationUrl: string;
+      slug: string;
+      name: string;
+      externalId?: string | null;
+    },
+    allCampaigns: Array<{
+      id: string;
+      trafficSource: string;
+      destinationUrl: string;
+      slug: string;
+      name: string;
+      externalId?: string | null;
+    }>,
+    from?: string,
+    to?: string,
+    excludeBots?: boolean,
+  ): Prisma.ClickWhereInput {
+    return attributedCampaignClickWhere(
+      campaign,
+      allCampaigns,
+      this.clickBase(from, to, excludeBots),
+    );
   }
 
   private convWhere(
@@ -132,6 +171,19 @@ export class CampaignReportService {
       createdAt: { gte: fromDate, lte: toDate },
       ...(excludeBots ? { click: { is: clickFilter } } : {}),
       isTest: false,
+    };
+  }
+
+  private reportConvWhere(
+    clickWhere: Prisma.ClickWhereInput,
+    from?: string,
+    to?: string,
+  ): Prisma.ConversionWhereInput {
+    const { fromDate, toDate } = this.parseRange(from, to);
+    return {
+      createdAt: { gte: fromDate, lte: toDate },
+      isTest: false,
+      click: { is: clickWhere },
     };
   }
 
@@ -162,8 +214,8 @@ export class CampaignReportService {
     const rows: CampaignReportRow[] = [];
 
     for (const campaign of campaigns) {
-      const clickWhere = this.clickWhere(campaign.id, from, to, excludeBots);
-      const convWhere = this.convWhere(campaign.id, from, to, excludeBots);
+      const clickWhere = this.reportClickWhere(campaign, campaigns, from, to, excludeBots);
+      const convWhere = this.reportConvWhere(clickWhere, from, to);
       const convCountWhere = await this.eventTypes.applyConversionCountFilter(convWhere);
       const spendWhere = this.spendWhere(campaign.id, from, to);
 
@@ -550,6 +602,9 @@ export class CampaignReportService {
       select: {
         id: true,
         name: true,
+        slug: true,
+        destinationUrl: true,
+        externalId: true,
         trafficSourceName: true,
         trafficSource: true,
         trafficSourceProfile: { select: { name: true } },
@@ -559,12 +614,23 @@ export class CampaignReportService {
       return { rows: [], eventColumns: [], campaign: null, dimension };
     }
 
+    const allCampaigns = await this.prisma.campaign.findMany({
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        destinationUrl: true,
+        externalId: true,
+        trafficSource: true,
+      },
+    });
+
     const eventTypeDefs = await this.eventTypes.findAll();
     const conversionSlugs = new Set(
       await this.eventTypes.getConversionCountSlugs(),
     );
-    const clickWhere = this.clickWhere(campaign.id, from, to, excludeBots);
-    const convWhere = this.convWhere(campaign.id, from, to, excludeBots);
+    const clickWhere = this.reportClickWhere(campaign, allCampaigns, from, to, excludeBots);
+    const convWhere = this.reportConvWhere(clickWhere, from, to);
 
     const [clicks, conversions] = await Promise.all([
       this.prisma.click.findMany({
@@ -604,6 +670,7 @@ export class CampaignReportService {
           visitorId: true,
           isBot: true,
           campaignExternalId: true,
+          utmCampaign: true,
           adsetId: true,
           adsetName: true,
           adId: true,
@@ -660,6 +727,7 @@ export class CampaignReportService {
               visitorId: true,
               isBot: true,
               campaignExternalId: true,
+              utmCampaign: true,
               adsetId: true,
               adsetName: true,
               adId: true,

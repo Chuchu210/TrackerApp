@@ -36,6 +36,11 @@ import { isPrivateOrLoopback } from '../shared/tracking/ip-resolver';
 import { fingerprintVisitorId } from '../common/utils/visitor-id';
 import { ConversionEventTypesService } from '../conversion-event-types/conversion-event-types.service';
 import { SettingsService } from '../settings/settings.service';
+import { SYSTEM_TRAFFIC_SOURCE_PROFILES } from '../traffic-sources/traffic-source-profiles.seed';
+import {
+  inferTrafficSourceFromQuery,
+  pickCampaignForInferredSource,
+} from '../shared/tracking/traffic-source-from-query';
 
 @Injectable()
 export class ClicksService {
@@ -109,8 +114,8 @@ export class ClicksService {
     query: Record<string, string | string[] | undefined>,
     visitor: VisitorContext,
   ) {
-    const campaign = await this.findCampaign(identifier);
-    const mappings = this.getCampaignParamMappings(campaign);
+    const campaign = await this.findCampaign(identifier, query);
+    const mappings = this.getCampaignParamMappings(campaign, query);
     const params = getTrackingParamsFromQuery(query, null, mappings);
     const rawParams = extractRawParams(query);
     const openAi = extractOpenAiAttribution(rawParams);
@@ -336,40 +341,64 @@ export class ClicksService {
     return { visitorId, isNewVisitor: !priorVisit };
   }
 
-  private getCampaignParamMappings(campaign: {
-    trafficSourceProfile?: { paramMappings: unknown } | null;
-  }): ParamMapping[] {
+  private campaignLookupInclude() {
+    return {
+      trafficSourceProfile: true,
+      paths: {
+        where: { active: true },
+        include: {
+          variants: {
+            where: { active: true },
+            include: { offer: { select: { id: true, name: true } } },
+          },
+        },
+      },
+    } as const;
+  }
+
+  private getCampaignParamMappings(
+    campaign: {
+      trafficSource: string;
+      trafficSourceProfile?: { paramMappings: unknown } | null;
+    },
+    query?: Record<string, string | string[] | undefined>,
+  ): ParamMapping[] {
+    const inferred = query ? inferTrafficSourceFromQuery(query) : null;
+    if (inferred === 'facebook' || campaign.trafficSource === 'facebook') {
+      const facebook = SYSTEM_TRAFFIC_SOURCE_PROFILES.find((p) => p.slug === 'facebook');
+      if (facebook?.paramMappings?.length) return facebook.paramMappings;
+    }
     if (campaign.trafficSourceProfile?.paramMappings) {
       return campaign.trafficSourceProfile.paramMappings as unknown as ParamMapping[];
     }
     return DEFAULT_PARAM_MAPPINGS;
   }
 
-  private async findCampaign(identifier: string) {
+  private async findCampaign(
+    identifier: string,
+    query?: Record<string, string | string[] | undefined>,
+  ) {
+    const include = this.campaignLookupInclude();
     const campaign = await this.prisma.campaign.findFirst({
       where: {
         OR: [{ slug: identifier }, { externalId: identifier }, { id: identifier }],
         active: true,
       },
-      include: {
-        trafficSourceProfile: true,
-        paths: {
-          where: { active: true },
-          include: {
-            variants: {
-              where: { active: true },
-              include: { offer: { select: { id: true, name: true } } },
-            },
-          },
-        },
-      },
+      include,
     });
 
     if (!campaign) {
       throw new NotFoundException(`Campaign "${identifier}" not found or inactive`);
     }
 
-    return campaign;
+    const inferred = query ? inferTrafficSourceFromQuery(query) : null;
+    if (!inferred || inferred === campaign.trafficSource) return campaign;
+
+    const candidates = await this.prisma.campaign.findMany({
+      where: { active: true, trafficSource: inferred },
+      include,
+    });
+    return pickCampaignForInferredSource(campaign, inferred, candidates);
   }
 
   async listClicks(filters: {

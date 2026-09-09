@@ -21,6 +21,22 @@ describe('Facebook campaign / adset / ad drilldown', () => {
     });
   });
 
+  it('labels Meta campaign with utm_campaign when present', () => {
+    expect(
+      clickGroupForDimension('ad_campaigns', { ...click, utmCampaign: 'autolp1' }),
+    ).toEqual({
+      key: '23851234567890123',
+      label: 'autolp1',
+    });
+  });
+
+  it('falls back to utm_campaign when Meta campaign id is missing', () => {
+    expect(clickGroupForDimension('ad_campaigns', { utmCampaign: 'autolp1' })).toEqual({
+      key: 'name:autolp1',
+      label: 'autolp1',
+    });
+  });
+
   it('groups by adset id and prefers the adset name as the label', () => {
     expect(clickGroupForDimension('adsets', click)).toEqual({
       key: '23851234567890456',
