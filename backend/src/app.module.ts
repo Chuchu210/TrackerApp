@@ -15,6 +15,7 @@ import { DomainsModule } from './domains/domains.module';
 import { TrafficSourcesModule } from './traffic-sources/traffic-sources.module';
 import { ConversionEventTypesModule } from './conversion-event-types/conversion-event-types.module';
 import { PlatformSyncModule } from './platform-sync/platform-sync.module';
+import { MachineApiModule } from './machine-api/machine-api.module';
 import { LandersModule } from './landers/landers.module';
 import { TargetsModule } from './targets/targets.module';
 import { PlacementsModule } from './placements/placements.module';
@@ -54,6 +55,7 @@ import { LeadsModule } from './leads/leads.module';
     TrafficSourcesModule,
     ConversionEventTypesModule,
     PlatformSyncModule,
+    MachineApiModule,
     LandersModule,
     OffersModule,
     AffiliateNetworksModule,

@@ -104,6 +104,8 @@ export interface Campaign {
   /** GET URL template to fire when a lead converts (uses this campaign's tracking domain) */
   incomingConversionUrl?: string;
   incomingConversionUrlAlt?: string;
+  /** GET templates for RTB buyers to report whether they took, refused or returned a lead. */
+  incomingOutcomeUrls?: { sold: string; rejected: string; returned: string };
   postbackConfig?: PostbackConfig;
   createdAt: string;
 }

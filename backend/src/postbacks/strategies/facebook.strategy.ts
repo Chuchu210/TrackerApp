@@ -11,6 +11,9 @@ import { httpRequestWithRetry } from '../helpers/facebook-graph-http.helper';
 import { sha256 } from '../helpers/hash.helper';
 import { metaEventNameForEventType } from '../../shared/tracking/meta-events';
 
+/** Currency of this tracker's offers when a postback does not say. */
+const DEFAULT_CURRENCY = 'EUR';
+
 @Injectable()
 export class FacebookStrategy implements PostbackStrategy {
   constructor(
@@ -55,16 +58,21 @@ export class FacebookStrategy implements PostbackStrategy {
     if (click.userAgent) userData.client_user_agent = click.userAgent;
 
     const eventId = `${conversion.id}-${click.clickId}`;
+    // The amount goes out in the currency it was recorded in — a buyer bidding in
+    // USD used to be reported to Meta as EUR. revenueBase is deliberately not
+    // used: it is labelled with BASE_CURRENCY, which defaults to USD when unset
+    // even though the amounts are euros.
+    const value = conversion.revenue || 0;
+    const rawCurrency = (conversion.currency || DEFAULT_CURRENCY).toUpperCase();
+    // An unreplaced buyer macro ("{CURRENCY}") or a typo would make Meta reject the whole event.
+    const currency = /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : DEFAULT_CURRENCY;
     const eventData = {
       event_name: metaEventNameForEventType(conversion.eventType),
       event_time: Math.floor(Date.now() / 1000),
       event_id: eventId,
       action_source: 'website',
       user_data: userData,
-      custom_data: {
-        value: conversion.revenue || 0,
-        currency: 'EUR',
-      },
+      custom_data: { value, currency },
     };
 
     const body = {
@@ -80,7 +88,7 @@ export class FacebookStrategy implements PostbackStrategy {
         success: status >= 200 && status < 300,
         method: 'POST',
         url,
-        requestBody: JSON.stringify(body),
+        requestBody: JSON.stringify({ ...body, access_token: '***' }), // journal lisible par l'API : jamais le jeton
         httpStatus: status,
         response: JSON.stringify(data),
       };
@@ -90,7 +98,7 @@ export class FacebookStrategy implements PostbackStrategy {
         success: false,
         method: 'POST',
         url,
-        requestBody: JSON.stringify(body),
+        requestBody: JSON.stringify({ ...body, access_token: '***' }), // journal lisible par l'API : jamais le jeton
         httpStatus: e.response?.status,
         response: e.response?.data
           ? JSON.stringify(e.response.data)

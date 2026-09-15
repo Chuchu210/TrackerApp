@@ -489,6 +489,7 @@ export default function CampaignDetailPage() {
           trackerBaseUrl={campaign.trackerBaseUrl}
           incomingConversionUrl={campaign.incomingConversionUrl}
           incomingConversionUrlAlt={campaign.incomingConversionUrlAlt}
+          incomingOutcomeUrls={campaign.incomingOutcomeUrls}
           trackingMode={campaign.trackingMode}
           lpScriptSnippet={campaign.lpScriptSnippet}
         />

@@ -27,6 +27,7 @@ import {
   isWithinAttributionWindow,
   isConversionCapReached,
 } from '../shared/tracking/attribution';
+import { LEAD_OUTCOME_EVENTS, isLeadOutcomeEvent } from '../shared/tracking/lead-outcome-events';
 import { buildFxConfig, normalizeToBase } from '../shared/tracking/currency';
 import { SettingsService } from '../settings/settings.service';
 
@@ -50,22 +51,39 @@ export class ConversionsService {
     resolvedClickId: string | undefined,
     query: Record<string, string | string[] | undefined> = {},
     context?: ConversionContext,
+    eventType?: string,
+    trackingId?: string,
   ): Promise<void> {
     const ipAllowlist = parseIpAllowlist(
       this.config.get<string>('POSTBACK_IP_ALLOWLIST'),
     );
 
     let expectedSecret: string | null = null;
-    if (resolvedClickId) {
+    // Same resolution as create() (clickId, else trackingId): a `tracking_id=` postback without `cid` used to skip
+    // the campaign secret and still record the conversion.
+    const target =
+      resolvedClickId || trackingId
+        ? await this.findClick({ clickId: resolvedClickId, trackingId } as CreateConversionDto)
+        : null;
+    if (target) {
       const click = await this.prisma.click.findUnique({
-        where: { clickId: resolvedClickId },
+        where: { clickId: target.clickId ?? resolvedClickId },
         select: { campaign: { select: { postbackConfig: { select: { postbackSecret: true } } } } },
       });
       expectedSecret = click?.campaign.postbackConfig?.postbackSecret ?? null;
     }
 
-    // Nothing to enforce for this campaign and no global allowlist — stay open.
-    if (!expectedSecret && ipAllowlist.length === 0) return;
+    if (!expectedSecret && ipAllowlist.length === 0) {
+      // A buyer outcome moves money (a Meta Purchase, reported revenue): never from an unauthenticated
+      // caller, even on a campaign that has not set a secret yet.
+      if (isLeadOutcomeEvent(eventType)) {
+        throw new ForbiddenException(
+          'Buyer outcome postbacks need a campaign postback secret or POSTBACK_IP_ALLOWLIST',
+        );
+      }
+      // Nothing to enforce for this campaign and no global allowlist — stay open.
+      return;
+    }
 
     const result = isPostbackAuthorized({
       expectedSecret,
@@ -96,8 +114,24 @@ export class ConversionsService {
       throw new NotFoundException('Click not found for provided clickId or trackingId');
     }
 
+    const eventType = normalizeEventType(dto.eventType);
+    // Untrusted (public browser) callers never read the response body — the
+    // tracker fetch only .catch()es — so skip the join-heavy re-fetch on the
+    // hot path (fires on every quiz click_button).
+    const trusted = context?.trusted !== false;
+    const outcome = isLeadOutcomeEvent(eventType);
+
+    // A buyer's verdict on a lead only ever comes from the buyer's server; from
+    // the public endpoint it would let anyone refuse or return our leads.
+    if (outcome && !trusted) {
+      return { skipped: true, reason: 'outcome_requires_server_postback' };
+    }
+
     // Attribution window: reject conversions that land too long after the click.
+    // Buyer outcomes are exempt — they describe a lead we already attributed, and
+    // routinely arrive days after the click.
     if (
+      !outcome &&
       !isWithinAttributionWindow(
         click.createdAt,
         new Date(),
@@ -107,16 +141,9 @@ export class ConversionsService {
       return { skipped: true, reason: 'outside_attribution_window' };
     }
 
-    const eventType = normalizeEventType(dto.eventType);
-
     const existing = await this.prisma.conversion.findUnique({
       where: { clickId_eventType: { clickId: click.clickId, eventType } },
     });
-
-    // Untrusted (public browser) callers never read the response body — the
-    // tracker fetch only .catch()es — so skip the join-heavy re-fetch on the
-    // hot path (fires on every quiz click_button).
-    const trusted = context?.trusted !== false;
 
     if (existing) {
       if (!trusted) return { conversion: { id: existing.id }, duplicate: true };
@@ -125,9 +152,11 @@ export class ConversionsService {
     }
 
     // Per-click conversion cap (across all event types) to curb injection/abuse.
-    if (click.campaign?.maxConversionsPerClick != null) {
+    // Outcomes neither count towards it nor are blocked by it: capping a buyer's
+    // verdict would lose revenue, not stop abuse.
+    if (!outcome && click.campaign?.maxConversionsPerClick != null) {
       const existingCount = await this.prisma.conversion.count({
-        where: { clickId: click.clickId },
+        where: { clickId: click.clickId, eventType: { notIn: [...LEAD_OUTCOME_EVENTS] } },
       });
       if (isConversionCapReached(existingCount, click.campaign.maxConversionsPerClick)) {
         return { skipped: true, reason: 'conversion_cap_reached' };
@@ -161,9 +190,11 @@ export class ConversionsService {
         revenue,
         totalRevenue,
         cost,
-        currency: dto.currency || null,
-        revenueBase: normalizeToBase(revenue, dto.currency, fx),
-        costBase: normalizeToBase(cost, dto.currency, fx),
+        // Devise acheteur acceptée seulement si c'est un code ISO à 3 lettres : une macro non remplacée
+        // (« {CURRENCY} ») ne doit ni partir chez Meta ni rendre incomparables les enchères du machine API.
+        currency: validCurrency(dto.currency),
+        revenueBase: normalizeToBase(revenue, validCurrency(dto.currency) ?? undefined, fx),
+        costBase: normalizeToBase(cost, validCurrency(dto.currency) ?? undefined, fx),
         transactionId: dto.transactionId || null,
         status: ConversionStatus.pending,
         metadata: metadata as Prisma.InputJsonValue,
@@ -210,13 +241,22 @@ export class ConversionsService {
       get('tk-cid') ||
       get('tk_cid');
 
-    await this.assertPostbackAuthorized(resolvedClickId, query, context);
+    // Normalisé une seule fois : le contrôle des issues acheteur et l'enregistrement voient exactement le même type.
+    // Sinon `et=lead_sold.` ou `et=lead sold` passaient le contrôle puis étaient enregistrés en lead_sold.
+    const eventType = normalizeEventType(get('et') || get('event_type'));
+    await this.assertPostbackAuthorized(
+      resolvedClickId,
+      query,
+      context,
+      eventType,
+      get('tracking_id') || get('externalid'),
+    );
 
     return this.create(
       {
         clickId: resolvedClickId,
         trackingId: get('tracking_id') || get('externalid'),
-        eventType: get('et') || get('event_type') || 'lead',
+        eventType,
         transactionId: get('txid') || get('transaction_id'),
         revenue: get('payout') ? parseFloat(get('payout')!) : undefined,
         currency: get('currency'),
@@ -355,4 +395,9 @@ export class ConversionsService {
 
     throw new BadRequestException('clickId, trackingId, or externalClickId is required');
   }
+}
+
+function validCurrency(raw?: string | null): string | null {
+  const code = (raw || '').trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(code) ? code : null;
 }

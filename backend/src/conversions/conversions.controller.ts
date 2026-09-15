@@ -68,11 +68,20 @@ export class ConversionsController {
   private buildContext(req: Request) {
     const forwarded = req.headers['x-forwarded-for'];
     const ip =
-      (typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : undefined) || req.ip;
+      // nginx ajoute l'IP réelle en FIN de X-Forwarded-For ($proxy_add_x_forwarded_for) ; le premier élément est
+      // fourni par le client et falsifiable, ce qui contournerait POSTBACK_IP_ALLOWLIST.
+      (typeof forwarded === 'string'
+        ? forwarded
+            .split(',')
+            .map((part) => part.trim())
+            .filter(Boolean)
+            .pop()
+        : undefined) || req.ip;
     const postbackParams = extractPostbackParamsFromQuery(req.query as Record<string, string>);
     return {
       incomingPostbackIp: ip,
-      incomingPostbackUrl: `${req.protocol}://${req.get('host')}${req.originalUrl}`,
+      // Stored, shown in analytics and exported to CSV: never with the postback secret in it.
+      incomingPostbackUrl: maskUrlSecrets(`${req.protocol}://${req.get('host')}${req.originalUrl}`),
       cookieHeader: req.headers.cookie,
       ...postbackParams,
     };
@@ -123,4 +132,8 @@ export class ConversionsController {
   retry(@Param('id') id: string) {
     return this.conversionsService.retry(id);
   }
+}
+
+export function maskUrlSecrets(url: string): string {
+  return url.replace(/([?&](?:secret|postback_secret|key|api_key|token|access_token)=)[^&#]*/gi, '$1***');
 }

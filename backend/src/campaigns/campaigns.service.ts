@@ -10,6 +10,7 @@ import { DomainsService } from '../domains/domains.service';
 import { TrackerScriptService } from '../tracker-script/tracker-script.service';
 import { TrafficSourcesService } from '../traffic-sources/traffic-sources.service';
 import { buildClickUrlFromTemplate } from '../shared/tracking/param-mapping';
+import { buildLeadOutcomeUrls } from '../shared/tracking/lead-outcome-events';
 import { getVisitStats } from '../analytics/visit-stats';
 import { ConversionEventTypesService } from '../conversion-event-types/conversion-event-types.service';
 import {
@@ -315,6 +316,13 @@ export class CampaignsService {
 
     const incomingConversionUrl = `${trackerBase}/postback?cid={click_id}&et=lead&payout={payout}&txid={transaction_id}`;
     const incomingConversionUrlAlt = `${trackerBase}/postback/{click_id}?et=lead&payout={payout}`;
+    // RTB buyers must report their verdict with these, not with `et=lead&payout`:
+    // the landing page has already recorded `lead`, so that postback is a duplicate
+    // and the bid is lost.
+    const incomingOutcomeUrls = buildLeadOutcomeUrls(
+      trackerBase,
+      (campaign as { postbackConfig?: { postbackSecret?: string | null } | null }).postbackConfig?.postbackSecret,
+    );
 
     return {
       ...campaign,
@@ -329,6 +337,7 @@ export class CampaignsService {
       lpScriptSnippet,
       incomingConversionUrl,
       incomingConversionUrlAlt,
+      incomingOutcomeUrls,
       setupNote: profile?.setupNote || null,
       paramMappings: profile?.paramMappings || [],
       conversionMethod: profile?.conversionMethod || null,

@@ -397,6 +397,12 @@ model Click {
   @@index([countryCode])
   @@index([isBot])
   @@index([isTest])
+  // Per-ad and per-offer facts for the media-buying machine (PRD §6.7, §11.1).
+  @@index([adId, createdAt])
+  @@index([offerId, createdAt])
+  // clicks is append-only and time-ordered: a BRIN index lets the hourly
+  // aggregation job read "the last 10 minutes" without a sequential scan.
+  @@index([createdAt], type: Brin)
   @@map("clicks")
 }
 
@@ -480,6 +486,8 @@ model Conversion {
   @@index([campaignId, createdAt])
   @@index([status, lastPostbackAt])
   @@index([isTest])
+  // Realized-value queries read leads and buyer outcomes by type over a window.
+  @@index([eventType, createdAt])
   @@map("conversions")
 }
 
@@ -568,6 +576,40 @@ model CampaignSpendSnapshot {
   @@unique([campaignId, platform, date, hour])
   @@index([campaignId, date])
   @@map("campaign_spend_snapshots")
+}
+
+/// Platform spend per ad, per day (hour = -1). Campaign snapshots cannot say
+/// which of 20 ads burned the budget, and the media-buying machine calibrates
+/// creatives on exactly that (PRD §6.7). Keyed on the platform ids rather than a
+/// tracker campaign: it joins to Click.adId, which the tracker already stores.
+model AdSpendSnapshot {
+  id                 String     @id @default(uuid())
+  platform           AdPlatform
+  externalAdId       String     @map("external_ad_id")
+  externalAdsetId    String?    @map("external_adset_id")
+  externalCampaignId String?    @map("external_campaign_id")
+  date               DateTime   @db.Date
+  hour               Int        @default(-1)
+  impressions        Int        @default(0)
+  clicks             Int        @default(0)
+  spend              Float      @default(0)
+  currency           String     @default("EUR")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+
+  @@unique([platform, externalAdId, date, hour])
+  @@index([externalCampaignId, date])
+  @@map("ad_spend_snapshots")
+}
+
+/// Clicks per UTC hour, kept current by a bounded job so that traffic-window
+/// reads never scan the clicks table on the redirect path (PRD §2.4, §16.2).
+model ClickHourlyCount {
+  hour      DateTime @id
+  clicks    Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("click_hourly_counts")
 }
 
 enum PlacementDimension {

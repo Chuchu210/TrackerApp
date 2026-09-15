@@ -4,6 +4,7 @@ type Props = {
   trackerBaseUrl?: string;
   incomingConversionUrl?: string;
   incomingConversionUrlAlt?: string;
+  incomingOutcomeUrls?: { sold: string; rejected: string; returned: string };
   trackingMode?: string;
   lpScriptSnippet?: string;
 };
@@ -12,6 +13,7 @@ export function IncomingConversionGuide({
   trackerBaseUrl,
   incomingConversionUrl,
   incomingConversionUrlAlt,
+  incomingOutcomeUrls,
   trackingMode,
   lpScriptSnippet,
 }: Props) {
@@ -63,6 +65,29 @@ export function IncomingConversionGuide({
           </>
         )}
       </div>
+
+      {incomingOutcomeUrls && (
+        <div>
+          <h4 className={`${sectionHeadingClass} mb-2`}>
+            RTB buyers — report whether the lead was taken
+          </h4>
+          <Alert tone="warning">
+            Do not send the buyer&apos;s bid with <code className={inlineCodeClass}>et=lead</code>: the
+            landing page has already recorded the lead, so that postback is ignored as a duplicate and
+            the bid is lost. Give the buyer these three URLs instead.
+          </Alert>
+          <p className={`text-xs ${mutedTextClass} mt-2 mb-1`}>Lead taken — payout is the winning bid:</p>
+          <CodeBlock>{incomingOutcomeUrls.sold}</CodeBlock>
+          <p className={`text-xs ${mutedTextClass} mt-2 mb-1`}>Lead refused:</p>
+          <CodeBlock>{incomingOutcomeUrls.rejected}</CodeBlock>
+          <p className={`text-xs ${mutedTextClass} mt-2 mb-1`}>Lead returned after purchase:</p>
+          <CodeBlock>{incomingOutcomeUrls.returned}</CodeBlock>
+          <p className={`text-xs ${mutedTextClass} mt-2`}>
+            These are accepted days after the click and are only sent on to Meta when the lead is
+            taken, as a Purchase valued at the bid.
+          </p>
+        </div>
+      )}
 
       <div>
         <h4 className={`${sectionHeadingClass} mb-2`}>Accepted query parameters</h4>

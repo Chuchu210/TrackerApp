@@ -46,6 +46,9 @@ const META_EVENT_MAP: Record<string, string> = {
   purchase: 'Purchase',
   sale: 'Purchase',
   sales: 'Purchase',
+  // RTB buyer took the lead: the winning bid is real revenue, so Meta gets a
+  // valued Purchase it can optimise on (lead_rejected / lead_returned are never sent).
+  lead_sold: 'Purchase',
 };
 
 export function metaEventNameForEventType(eventType: string): string {

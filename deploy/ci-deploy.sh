@@ -16,6 +16,15 @@ if changed '^backend/'; then
   cd "$APP_DIR/backend"
   npm ci
   npx prisma migrate deploy
+  # Les index des migrations 2026091312* sont construits CONCURRENTLY : une construction interrompue laisse un index
+  # INVALID que `IF NOT EXISTS` garde en silence. Alerte seulement (le déploiement continue) ; reprise :
+  # DROP INDEX CONCURRENTLY IF EXISTS <nom>; puis npx prisma migrate resolve --rolled-back <migration>; puis redeploy.
+  if command -v psql >/dev/null 2>&1 && [ -f .env ]; then
+    invalid=$( (set -a; . ./.env; set +a; psql "${DATABASE_URL%%\?*}" -Atc "SELECT string_agg(indexrelid::regclass::text, ', ') FROM pg_index WHERE NOT indisvalid") 2>/dev/null || true)
+    if [ -n "$invalid" ]; then
+      echo "== WARNING: invalid index(es): $invalid ==" >&2
+    fi
+  fi
   npm run build
   pm2 restart tracker-api --update-env
 else

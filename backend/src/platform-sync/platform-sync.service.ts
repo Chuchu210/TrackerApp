@@ -3,7 +3,11 @@ import { Cron } from '@nestjs/schedule';
 import { HttpService } from '@nestjs/axios';
 import { AdPlatform, ControlActionStatus, PlatformConnectionStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import type { PlatformSyncAdapter, SpendMetricRow } from './interfaces/platform-sync.adapter';
+import type {
+  AdSpendMetricRow,
+  PlatformSyncAdapter,
+  SpendMetricRow,
+} from './interfaces/platform-sync.adapter';
 import { FacebookSyncAdapter } from './adapters/facebook.adapter';
 import { GoogleSyncAdapter } from './adapters/google.adapter';
 import { MediagoSyncAdapter } from './adapters/mediago.adapter';
@@ -20,6 +24,8 @@ import {
 } from './dto/platform-sync.dto';
 import { sanitizeMediagoCredentialsForResponse } from './mediago/mediago-credentials';
 import { MetaCreativesService } from './meta-creatives.service';
+
+import { describeError } from '../common/utils/describe-error';
 
 @Injectable()
 export class PlatformSyncService {
@@ -42,9 +48,9 @@ export class PlatformSyncService {
   // snapshots this writes, so the sync interval is the real data freshness.
   @Cron('*/15 * * * *')
   async scheduledSync() {
-    await this.syncAll().catch((err) => this.logger.error('Scheduled sync failed', err));
+    await this.syncAll().catch((err) => this.logger.error(`Scheduled sync failed: ${describeError(err)}`));
     await this.metaCreatives.refreshRecent().catch((err) =>
-      this.logger.error('Meta creative refresh failed', err),
+      this.logger.error(`Meta creative refresh failed: ${describeError(err)}`),
     );
   }
 
@@ -179,7 +185,7 @@ export class PlatformSyncService {
             : 'No Mediago accounts returned for this token',
         };
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = describeError(err);
         return { ok: false, accounts: [], message };
       }
     }
@@ -444,7 +450,7 @@ export class PlatformSyncService {
         const n = await this.syncConnection(conn.id, from, to);
         total += n;
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = describeError(err);
         await this.prisma.platformConnection.update({
           where: { id: conn.id },
           data: { status: PlatformConnectionStatus.error, lastError: msg },
@@ -471,7 +477,7 @@ export class PlatformSyncService {
     if (conn.platform === AdPlatform.openai) {
       const auto = await this.autoMapOpenAiCampaigns(connectionId).catch((err) => {
         // Mapping is a convenience; a failure here must not abort the sync.
-        this.logger.error('OpenAI auto-map failed', err);
+        this.logger.error(`OpenAI auto-map failed: ${describeError(err)}`);
         return { mapped: 0 };
       });
       if (auto.mapped > 0) {
@@ -502,6 +508,23 @@ export class PlatformSyncService {
       saved++;
     }
 
+    // Ad-level spend is stored even for platform campaigns not mapped to a
+    // tracker campaign: the media-buying machine joins it on the ad id. A
+    // failure here must not undo the campaign sync that just succeeded.
+    if (adapter.fetchAdMetrics) {
+      try {
+        const adRows = await adapter.fetchAdMetrics(
+          conn.credentials as Record<string, unknown>,
+          conn.accountId,
+          start,
+          end,
+        );
+        for (const row of adRows) await this.saveAdSnapshot(conn.platform, row);
+      } catch (err) {
+        this.logger.error(`Ad-level spend sync failed for connection ${connectionId}: ${describeError(err)}`);
+      }
+    }
+
     await this.prisma.platformConnection.update({
       where: { id: conn.id },
       data: {
@@ -512,6 +535,30 @@ export class PlatformSyncService {
     });
 
     return saved;
+  }
+
+  private async saveAdSnapshot(platform: AdPlatform, row: AdSpendMetricRow) {
+    const hour = row.hour ?? -1;
+    const values = {
+      externalAdsetId: row.externalAdsetId ?? null,
+      externalCampaignId: row.externalCampaignId ?? null,
+      impressions: row.impressions,
+      clicks: row.clicks,
+      spend: row.spend,
+      currency: row.currency || 'EUR',
+    };
+    await this.prisma.adSpendSnapshot.upsert({
+      where: {
+        platform_externalAdId_date_hour: {
+          platform,
+          externalAdId: row.externalAdId,
+          date: row.date,
+          hour,
+        },
+      },
+      create: { platform, externalAdId: row.externalAdId, date: row.date, hour, ...values },
+      update: values,
+    });
   }
 
   private async saveSnapshot(
