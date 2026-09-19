@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ForbiddenException,
@@ -30,9 +31,23 @@ import {
 import { LEAD_OUTCOME_EVENTS, isLeadOutcomeEvent } from '../shared/tracking/lead-outcome-events';
 import { buildFxConfig, normalizeToBase } from '../shared/tracking/currency';
 import { SettingsService } from '../settings/settings.service';
+import {
+  CONTACT_EVENT_TYPES,
+  errorLabel,
+  hasContact,
+  isContactEvent,
+  isUniqueViolation,
+  leadFromConversion,
+  mergeLeadData,
+  withoutContact,
+  type LeadData,
+} from '../leads/lead-fields';
+import { fillLead, scrubVisitPii } from '../leads/lead-sql';
 
 @Injectable()
 export class ConversionsService {
+  private readonly logger = new Logger(ConversionsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly postbacks: PostbacksService,
@@ -146,6 +161,8 @@ export class ConversionsService {
     });
 
     if (existing) {
+      // Même une conversion en doublon peut porter un contact que la première n'avait pas.
+      await this.storeLead(click, eventType, dto, context, existing.id);
       if (!trusted) return { conversion: { id: existing.id }, duplicate: true };
       const full = await this.getConversionWithClick(existing.id);
       return { conversion: full, duplicate: true };
@@ -177,6 +194,9 @@ export class ConversionsService {
 
     const settings = await this.settings.getEffective();
     const fx = buildFxConfig(settings.baseCurrency, settings.fxRates);
+    // Une personne effacée ne revient pas par une conversion tardive (postback rejoué, re-soumission) : ni dans les
+    // métadonnées de la nouvelle conversion, ni dans la ligne tombale du lead.
+    const { erased, metadata: storedMetadata } = await this.erasureState(click.clickId, metadata);
     // Ignore client-supplied money on untrusted (public) calls.
     const revenue = trusted ? dto.revenue || 0 : 0;
     const cost = trusted ? dto.cost || 0 : 0;
@@ -197,20 +217,31 @@ export class ConversionsService {
         costBase: normalizeToBase(cost, validCurrency(dto.currency) ?? undefined, fx),
         transactionId: dto.transactionId || null,
         status: ConversionStatus.pending,
-        metadata: metadata as Prisma.InputJsonValue,
-        incomingPostbackIp: context?.incomingPostbackIp || null,
-        incomingPostbackUrl: context?.incomingPostbackUrl || null,
-        postbackParam1: dto.postbackParam1 || context?.postbackParam1 || null,
-        postbackParam2: dto.postbackParam2 || context?.postbackParam2 || null,
-        postbackParam3: dto.postbackParam3 || context?.postbackParam3 || null,
-        postbackParam4: dto.postbackParam4 || context?.postbackParam4 || null,
-        postbackParam5: dto.postbackParam5 || context?.postbackParam5 || null,
+        metadata: storedMetadata as Prisma.InputJsonValue,
+        incomingPostbackIp: erased ? null : context?.incomingPostbackIp || null,
+        incomingPostbackUrl: erased
+          ? context?.incomingPostbackUrl
+            ? `${context.incomingPostbackUrl.split('?')[0]}?[erased]`
+            : null
+          : context?.incomingPostbackUrl || null,
+        // Une visite effacée n'écrit plus rien de la personne : ces cinq colonnes libres sont l'endroit où les
+        // acheteurs rangent l'adresse et le numéro, et elles ressortent dans l'export.
+        postbackParam1: erased ? null : dto.postbackParam1 || context?.postbackParam1 || null,
+        postbackParam2: erased ? null : dto.postbackParam2 || context?.postbackParam2 || null,
+        postbackParam3: erased ? null : dto.postbackParam3 || context?.postbackParam3 || null,
+        postbackParam4: erased ? null : dto.postbackParam4 || context?.postbackParam4 || null,
+        postbackParam5: erased ? null : dto.postbackParam5 || context?.postbackParam5 || null,
         // A test click can only ever produce test conversions; and firing a
         // conversion while test mode is on marks it test even against a real
         // click, so rehearsing a postback never adds a lead to the reports.
         isTest: click.isTest || settings.testMode,
       },
     });
+
+    // La demande d'effacement a pu arriver entre la lecture ci-dessus et cette écriture : le nettoyage de
+    // l'effacement était alors déjà passé, et cette conversion aurait gardé la personne. On revérifie après coup.
+    const erasedNow = erased || (await this.erasedSince(click.clickId));
+    await this.storeLead(click, eventType, dto, context, conversion.id, erasedNow);
 
     setImmediate(() => {
       this.postbacks.processConversion(conversion.id).catch(() => {});
@@ -353,6 +384,122 @@ export class ConversionsService {
         postbackLogs: true,
       },
     });
+  }
+
+  /**
+   * The lead behind this visit. Quiz pages send the answers with `lead` and the contact later with
+   * `callback_request`, so the row is keyed by click and filled in as the events arrive — and it is only created once
+   * a real contact (phone, email or name) has been received, never for a funnel step alone.
+   * A failure here loses nothing: the conversion and its metadata are already stored.
+   */
+  private async storeLead(
+    click: { clickId: string; campaignId: string; isTest: boolean },
+    eventType: string,
+    dto: CreateConversionDto,
+    context?: ConversionContext,
+    conversionId?: string,
+    erased = false,
+  ): Promise<void> {
+    if (!isContactEvent(eventType) || erased) return;
+    try {
+      const incoming = leadFromConversion(dto.metadata as Record<string, unknown>, context);
+      if (!hasContact(incoming)) {
+        // Une étape du tunnel sans contact : elle complète une visite déjà connue, mais ne crée jamais de lead.
+        // Le UPDATE ne touche rien s'il n'y a pas de ligne, et jamais une ligne effacée ou purgée.
+        await fillLead(this.prisma, click.clickId, incoming, conversionId ?? null);
+        return;
+      }
+      // Les réponses déjà envoyées par les événements précédents de ce clic complètent le contact qui arrive.
+      // Chaque événement est relu avec SA date (preuve de consentement) et le plus ancien garde la main, comme dans
+      // la réconciliation : un même clic donne le même lead par les deux chemins.
+      const earlier = await this.prisma.conversion.findMany({
+        where: { clickId: click.clickId, eventType: { in: [...CONTACT_EVENT_TYPES] } },
+        select: { metadata: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+        take: 20,
+      });
+      let data: LeadData | null = null;
+      for (const row of earlier) {
+        data = mergeLeadData(data, leadFromConversion(row.metadata as Record<string, unknown>, undefined, row.createdAt));
+      }
+      data = mergeLeadData(data, incoming);
+      const settings = await this.settings.getEffective();
+      try {
+        await this.prisma.lead.create({
+          data: {
+            ...data,
+            answers: data.answers ?? undefined,
+            clickId: click.clickId,
+            campaignId: click.campaignId,
+            conversionId: conversionId ?? null,
+            isTest: click.isTest || settings.testMode,
+          },
+        });
+      } catch (err) {
+        if (!isUniqueViolation(err)) throw err;
+        // Deux événements du même clic en même temps : l'autre a créé la ligne, celui-ci la complète — champ par
+        // champ, côté base, donc rien de ce que l'autre a écrit n'est écrasé.
+        await fillLead(this.prisma, click.clickId, data, conversionId ?? null);
+      }
+    } catch (err) {
+      // Jamais le message de l'erreur : Prisma y recopie les données envoyées, donc les coordonnées du lead.
+      this.logger.error(`Lead not stored for click ${click.clickId}: ${errorLabel(err)}`);
+    }
+  }
+
+  /**
+   * Whether this visit was erased on request, and the metadata to store for it: a person who asked to be forgotten
+   * is not written back by a late conversion, neither in the metadata nor as a lead.
+   */
+  private async erasureState(
+    clickId: string,
+    metadata: Record<string, unknown>,
+  ): Promise<{ erased: boolean; metadata: Record<string, unknown> }> {
+    // Aucun raccourci sur le contenu : l'acheteur met couramment l'adresse dans `p1`, jamais dans les métadonnées,
+    // et une garde qui ne regarde que celles-ci laisse la personne effacée revenir en clair par une colonne de
+    // postback. La lecture se fait sur `click_id`, qui est un index unique.
+    try {
+      const erased = await this.prisma.lead.findFirst({
+        where: { clickId, NOT: { erasedAt: null } },
+        select: { id: true },
+      });
+      if (!erased) return { erased: false, metadata };
+      // En mode « effacement » : le code postal, l'État et les réponses partent aussi, comme dans la ligne du lead.
+      // Sans ce mot, un postback rejoué le lendemain les réécrivait, et la rétention les garde par construction.
+      const cleaned = withoutContact(metadata, 'erased');
+      return {
+        erased: true,
+        // `withoutContact` rend `null` quand il n'y avait rien à retirer, et un TABLEAU quand on lui en donne un.
+        // Écarter le tableau réécrivait l'ORIGINAL — donc la personne effacée — sur une visite effacée. Le cas est
+        // d'ailleurs injoignable ici : `metadata` vient d'un littéral d'objet (`{ ...dto.metadata, ...ids }`), donc
+        // un tableau envoyé par l'acheteur y arrive déjà en objet à clés numériques. La branche disparaît plutôt
+        // que de rester fausse.
+        metadata: (cleaned as Record<string, unknown> | null) ?? metadata,
+      };
+    } catch (err) {
+      this.logger.error(`Erasure check failed for click ${clickId}: ${errorLabel(err)}`);
+      return { erased: false, metadata };
+    }
+  }
+
+  /**
+   * Whether the visit was erased while this conversion was being written — and if so, clears the person from what
+   * was just written, because the erasure's own scrub had already run by then.
+   */
+  private async erasedSince(clickId: string): Promise<boolean> {
+    try {
+      const erased = await this.prisma.lead.findFirst({
+        where: { clickId, NOT: { erasedAt: null } },
+        select: { id: true },
+      });
+      if (!erased) return false;
+      await scrubVisitPii(this.prisma, [clickId], 'erased');
+      this.logger.warn(`Conversion written for click ${clickId} during its erasure — scrubbed again`);
+      return true;
+    } catch (err) {
+      this.logger.error(`Erasure re-check failed for click ${clickId}: ${errorLabel(err)}`);
+      return false;
+    }
   }
 
   private async findClick(dto: CreateConversionDto) {

@@ -179,7 +179,7 @@ export class ClicksService {
       },
     );
 
-    const { visitorId, isNewVisitor } = await this.resolveVisitor(campaign.id, visitor);
+    const { visitorId, isNewVisitor, visitorIsFingerprint } = await this.resolveVisitor(campaign.id, visitor);
 
     await this.prisma.click.create({
       data: {
@@ -187,6 +187,10 @@ export class ClicksService {
         campaignId: campaign.id,
         visitorId,
         isNewVisitor,
+        // Écrit ICI, une fois, parce que c'est le seul moment où on le sait : plus tard, `visitor_id` n'est plus
+        // qu'une chaîne, et la rétention la remplace de toute façon chaque nuit. L'effacement d'une personne s'en
+        // sert pour refuser de s'élargir à travers l'empreinte d'un appareil partagé (lead-sql.ts::visitsOfPerson).
+        visitorIsFingerprint,
         trackingId: params.tracking_id || null,
         externalClickId: params.external_click_id || null,
         gclid: params.gclid || null,
@@ -312,13 +316,16 @@ export class ClicksService {
   private async resolveVisitor(
     campaignId: string,
     visitor: VisitorContext,
-  ): Promise<{ visitorId: string; isNewVisitor: boolean }> {
+  ): Promise<{ visitorId: string; isNewVisitor: boolean; visitorIsFingerprint: boolean }> {
     const fingerprint = fingerprintVisitorId(
       campaignId,
       visitor.ipAddress,
       visitor.userAgent,
     );
     const visitorId = visitor.visitorId || fingerprint;
+    // Le seul endroit où l'on SAIT si cet identifiant est une empreinte : ici, au moment où l'on choisit. Plus
+    // tard, il n'y a plus qu'une chaîne — et une chaîne que le client a pu envoyer lui-même.
+    const visitorIsFingerprint = !visitor.visitorId;
 
     const priorVisit = await this.prisma.click.findFirst({
       where: {
@@ -338,7 +345,7 @@ export class ClicksService {
       select: { id: true },
     });
 
-    return { visitorId, isNewVisitor: !priorVisit };
+    return { visitorId, isNewVisitor: !priorVisit, visitorIsFingerprint };
   }
 
   private campaignLookupInclude() {

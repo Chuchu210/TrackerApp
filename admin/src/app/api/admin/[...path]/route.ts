@@ -18,6 +18,8 @@ async function proxy(req: NextRequest, context: { params: Promise<{ path: string
 
   const headers = new Headers();
   headers.set('x-api-key', API_KEY);
+  // Qui agit : l'API journalise l'acteur d'un effacement de lead (données personnelles).
+  if (session.user.email) headers.set('x-admin-user', session.user.email);
   const contentType = req.headers.get('content-type');
   if (contentType) headers.set('content-type', contentType);
 
@@ -53,6 +55,10 @@ async function proxy(req: NextRequest, context: { params: Promise<{ path: string
     const outHeaders = new Headers({ 'content-type': upstreamType });
     const disposition = upstream.headers.get('content-disposition');
     if (disposition) outHeaders.set('content-disposition', disposition);
+    // L'export des leads pose « ne pas mettre en cache » exprès : un fichier de coordonnées n'a rien à faire dans le
+    // cache du navigateur ni dans celui d'un proxy.
+    const cache = upstream.headers.get('cache-control');
+    if (cache) outHeaders.set('cache-control', cache);
     return new Response(buffer, { status: upstream.status, headers: outHeaders });
   }
 

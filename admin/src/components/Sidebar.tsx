@@ -51,6 +51,7 @@ const groups: NavGroup[] = [
     section: 'Conversions',
     links: [
       { href: '/conversions', label: 'Conversions', icon: 'M9 12l2 2 4-4M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z' },
+      { href: '/leads', label: 'Leads', icon: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75' },
       { href: '/conversion-events', label: 'Event types', icon: 'M4 7h16M4 12h10M4 17h6' },
       { href: '/incoming-postbacks', label: 'Incoming postbacks', icon: 'M3 12h13M11 6l6 6-6 6M21 4v16' },
     ],

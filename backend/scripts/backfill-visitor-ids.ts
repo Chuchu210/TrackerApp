@@ -34,7 +34,13 @@ async function main() {
 
     await prisma.click.update({
       where: { id: click.id },
-      data: { visitorId, isNewVisitor },
+      // `visitorIsFingerprint` PART AVEC `visitorId`, toujours. Ce script recalcule une EMPREINTE d'appareil
+      // (campagne + IP + user-agent) : par construction, ce qu'il écrit n'est pas un identifiant de navigateur.
+      // L'omettre laissait la colonne dire « vrai cookie » sur une chaîne devenue une empreinte partagée — et
+      // comme l'effacement croit la colonne avant le préfixe, il élargissait de nouveau à travers l'appareil du
+      // voisin : prénom, nom, courriel et texte de consentement d'un tiers détruits, sans retour. C'est le
+      // bloquant du tour 15, rouvert par l'autre bout. Qui écrit l'un écrit l'autre.
+      data: { visitorId, isNewVisitor, visitorIsFingerprint: true },
     });
     updated++;
   }

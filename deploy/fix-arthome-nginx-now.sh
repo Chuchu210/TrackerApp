@@ -25,6 +25,9 @@ server {
         proxy_pass http://127.0.0.1:3001;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        # Sans cette ligne, nginx transmet l'en-tête du client tel quel : avec `trust proxy = 1`, l'application
+        # lit alors une adresse choisie par l'appelant, et l'étranglement des routes leads ne protège plus rien.
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
@@ -53,6 +56,9 @@ server {
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        # Sans cette ligne, nginx transmet l'en-tête du client tel quel : avec `trust proxy = 1`, l'application
+        # lit alors une adresse choisie par l'appelant, et l'étranglement des routes leads ne protège plus rien.
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 }

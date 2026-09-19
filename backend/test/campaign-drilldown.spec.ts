@@ -31,7 +31,7 @@ describe('Facebook campaign / adset / ad drilldown', () => {
   });
 
   it('falls back to utm_campaign when Meta campaign id is missing', () => {
-    expect(clickGroupForDimension('ad_campaigns', { utmCampaign: 'autolp1' })).toEqual({
+    expect(clickGroupForDimension('ad_campaigns', { clickId: 'c1', utmCampaign: 'autolp1' })).toEqual({
       key: 'name:autolp1',
       label: 'autolp1',
     });

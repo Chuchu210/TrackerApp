@@ -373,17 +373,32 @@ model Click {
 
   visitorId    String? @map("visitor_id")
   isNewVisitor Boolean @default(true) @map("is_new_visitor")
+  /// Vrai quand `visitor_id` a été CALCULÉ (campagne + IP + user-agent) faute de cookie : c'est l'empreinte d'un
+  /// appareil, pas une personne — deux téléphones sur le même wifi la partagent — et un effacement n'a jamais le
+  /// droit de s'élargir à travers elle. Le préfixe « fp_ » ne peut pas porter cette information : il vient du
+  /// client (`tk_vid` en query, cookie `tk-vid`), et la rétention le remplace de toute façon par « p:… » chaque
+  /// nuit, ce qui désarmait la garde sur les visites mêmes qu'elle protégeait. Nullable exprès : les lignes
+  /// d'avant cette colonne ne peuvent pas être jugées, et « inconnu » veut dire « on n'élargit pas ».
+  visitorIsFingerprint Boolean? @map("visitor_is_fingerprint")
 
   rawParams      Json? @map("raw_params")
   requestHeaders Json? @map("request_headers")
 
+  /// Set once the person has been removed from this visit (retention or erasure). The sweep reads it, so a scrub
+  /// interrupted half-way is picked up again, and a visit already cleared is never looked at twice.
+  scrubbedAt DateTime? @map("scrubbed_at")
+
   createdAt DateTime @default(now()) @map("created_at")
 
   conversions Conversion[]
+  lead        Lead?
   funnelSteps FunnelStepEvent[]
 
   @@index([campaignId, createdAt])
   @@index([campaignId, visitorId])
+  // Seul, `visitor_id` est le prédicat de l'effacement d'une personne (lead-sql.ts::visitsOfPerson) : l'index
+  // composite ci-dessus ne peut pas le servir, sa colonne de tête est absente de la requête.
+  @@index([visitorId])
   // Serves the per-IP click-velocity count in ClicksService.evaluateVelocity
   // (fraud detection), which runs on every non-private click.
   @@index([ipAddress, createdAt])
@@ -461,6 +476,10 @@ model Conversion {
 
   incomingPostbackIp  String? @map("incoming_postback_ip")
   incomingPostbackUrl String? @map("incoming_postback_url")
+
+  /// Set once the person has been removed from this conversion. A postback that lands after the visit was
+  /// swept leaves a row without it, so the next sweep takes that row and nothing escapes retention.
+  scrubbedAt DateTime? @map("scrubbed_at")
   postbackParam1      String? @map("postback_param_1")
   postbackParam2      String? @map("postback_param_2")
   postbackParam3      String? @map("postback_param_3")
@@ -489,6 +508,81 @@ model Conversion {
   // Realized-value queries read leads and buyer outcomes by type over a window.
   @@index([eventType, createdAt])
   @@map("conversions")
+}
+
+/// The person behind a visit: contact, quiz answers and consent, merged from every event of that click that carries
+/// them (lead, callback_request, postalcode). One row per click, and only once a real contact arrived.
+/// Personal data: admin API only, never the machine API.
+/// Les personnes qui ont demandé leur effacement, réduites à une empreinte à sens unique.
+///
+/// La garde d'effacement des conversions lit `click_id` : elle ne couvre donc que les visites DÉJÀ connues. Un
+/// lead capté sur un autre site arrive avec un identifiant neuf — aucune pierre tombale ne s'y rattache, et la
+/// personne effacée revenait intégralement, contact compris. La reconnaître par son numéro est impossible :
+/// l'effacement l'a supprimé, comme promis.
+///
+/// D'où cette table, et sa forme : un HMAC-SHA256 du contact normalisé, calculé avec une clé gardée HORS de la base
+/// (`ERASURE_HMAC_KEY`). Ce sont des données PSEUDONYMISÉES, pas anonymes : qui détient la clé ET un numéro peut
+/// vérifier si ce numéro est dans la liste. Sans la clé, une base volée ne se renverse pas — un SHA-256 nu, lui,
+/// se renversait en trente secondes par numéro. L'unique usage de cette ligne est de REFUSER un retour.
+model ErasedContact {
+  /// HMAC-SHA256 (clé ERASURE_HMAC_KEY) du téléphone normalisé ou de l'adresse en minuscules sans « +étiquette ».
+  hash     String
+  /// `phone` / `email` : contact DÉCLARÉ (champ de contact de la personne) ; `phone_texte` / `email_texte` : reconnu
+  /// dans un texte libre ; `temoin` : l'empreinte témoin de la clé. Sert à décider un refus (un « trouvé » ne refuse
+  /// que contre un « déclaré ») et au diagnostic — jamais à retrouver la personne.
+  kind     String
+  /// L'effacement qui a inscrit la ligne (un identifiant aléatoire, pas la personne) : un contact reconnu dans un
+  /// TEXTE ne refuse un contact déclaré que si un autre contact de l'envoi appartient au même effacement (juré r11).
+  /// La clé est le COUPLE (empreinte, effacement) : un même numéro trouvé chez Ann puis déclaré par Eve appartient
+  /// aux deux effacements (juré r13). `avant-groupes` : ligne écrite avant cette colonne — elle garde l'ancienne
+  /// règle (elle refuse seule) ; `temoin` : la ligne témoin de la clé.
+  groupe   String
+  erasedAt DateTime @default(now()) @map("erased_at")
+
+  @@id([hash, groupe])
+  @@index([erasedAt])
+  @@map("erased_contacts")
+}
+
+model Lead {
+  id           String    @id @default(uuid())
+  clickId      String    @unique @map("click_id")
+  click        Click     @relation(fields: [clickId], references: [clickId], onDelete: Cascade)
+  campaignId   String    @map("campaign_id")
+  /// First conversion that carried this contact. Informational: the lead survives its conversions.
+  conversionId String?   @map("conversion_id")
+  source       String
+  firstName    String?   @map("first_name")
+  lastName     String?   @map("last_name")
+  email        String?
+  phone        String?
+  zip          String?
+  state        String?
+  answers      Json?
+  /// Consent text as displayed to the visitor, declared by the page (public endpoint): evidence, not proof.
+  consentText  String?   @map("consent_text")
+  /// sha256 of the normalized consent text: groups leads by the wording they actually saw.
+  consentHash  String?   @map("consent_hash")
+  consentAt    DateTime? @map("consent_at")
+  ip           String?
+  userAgent    String?   @map("user_agent")
+  pageUrl      String?   @map("page_url")
+  isTest       Boolean   @default(false) @map("is_test")
+  /// Set when the personal fields were purged by retention (LEADS_PII_RETENTION_DAYS).
+  purgedAt     DateTime? @map("purged_at")
+  /// Set when the person asked to be erased. The row stays as a tombstone so a later event never brings them back.
+  erasedAt     DateTime? @map("erased_at")
+  /// Set once every other copy of the person (metadata, visit, postback logs) has been cleared. A cron resumes the
+  /// ones left half-done by a crash or a timeout.
+  scrubbedAt   DateTime? @map("scrubbed_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@index([campaignId, createdAt])
+  @@index([createdAt])
+  @@index([phone])
+  @@index([email])
+  @@map("leads")
 }
 
 model PostbackLog {

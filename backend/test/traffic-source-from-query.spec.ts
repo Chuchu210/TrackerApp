@@ -4,17 +4,27 @@ import {
   pickCampaignForInferredSource,
 } from '../src/shared/tracking/traffic-source-from-query';
 
-const lp1 = {
+// Le décor : une campagne, telle que la fonction la voit. Sans ce type commun, `'mediago' as const` fige lp1
+// dans un type que la campagne Facebook ne peut plus habiter — et le générique refuse la liste des candidats.
+type Campagne = {
+  id: string;
+  trafficSource: 'mediago' | 'facebook';
+  destinationUrl: string;
+  slug: string;
+  name: string;
+};
+
+const lp1: Campagne = {
   id: 'mediago-id',
-  trafficSource: 'mediago' as const,
+  trafficSource: 'mediago',
   destinationUrl: 'https://nexoquote.com/',
   slug: 'lp1',
   name: 'LP1 Mediago',
 };
 
-const facebook = {
+const facebook: Campagne = {
   id: 'facebook-id',
-  trafficSource: 'facebook' as const,
+  trafficSource: 'facebook',
   destinationUrl: 'https://nexoquote.com/',
   slug: 'fb-lp1',
   name: 'Facebook LP1',

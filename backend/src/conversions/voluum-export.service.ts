@@ -125,9 +125,13 @@ export class VoluumExportService {
   }
 
   private escapeCsv(value: string): string {
-    if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-      return `"${value.replace(/"/g, '""')}"`;
+    // Une cellule qui commence par =, +, - ou @ est une formule pour Excel et Sheets, et cet export transporte des
+    // champs libres (variables personnalisées, paramètres de postback) que des tiers remplissent.
+    // Un nombre reste un nombre : neutraliser « -25.00 » casserait la colonne des revenus chez le destinataire.
+    const safe = !/^-?\d+(\.\d+)?$/.test(value) && /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+    if (safe.includes(',') || safe.includes('"') || safe.includes('\n')) {
+      return `"${safe.replace(/"/g, '""')}"`;
     }
-    return value;
+    return safe;
   }
 }

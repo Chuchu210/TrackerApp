@@ -15,6 +15,8 @@ export interface ConversionContext {
    * depends on them, and they are what the Meta pixel drops in the browser.
    */
   cookieHeader?: string;
+  /** Browser User-Agent, kept with a lead as consent evidence. */
+  userAgent?: string;
   postbackParam1?: string;
   postbackParam2?: string;
   postbackParam3?: string;

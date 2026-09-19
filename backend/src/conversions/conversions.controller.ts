@@ -7,6 +7,7 @@ import { CreateConversionDto } from './dto/create-conversion.dto';
 import { extractPostbackParamsFromQuery } from './dto/conversion-context';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { ApiKeyGuard } from '../common/guards/api-key.guard';
+import { sanitizeUrlPii } from '../leads/lead-fields';
 
 @Controller()
 export class ConversionsController {
@@ -80,9 +81,11 @@ export class ConversionsController {
     const postbackParams = extractPostbackParamsFromQuery(req.query as Record<string, string>);
     return {
       incomingPostbackIp: ip,
-      // Stored, shown in analytics and exported to CSV: never with the postback secret in it.
-      incomingPostbackUrl: maskUrlSecrets(`${req.protocol}://${req.get('host')}${req.originalUrl}`),
+      // Stored, shown in analytics and exported to CSV: never with the postback secret, and never with the person
+      // (buyers routinely put the email and phone in the postback query string).
+      incomingPostbackUrl: sanitizeUrlPii(maskUrlSecrets(`${req.protocol}://${req.get('host')}${req.originalUrl}`)),
       cookieHeader: req.headers.cookie,
+      userAgent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : undefined,
       ...postbackParams,
     };
   }

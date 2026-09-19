@@ -223,6 +223,32 @@ export interface Conversion {
   postbackLogs: PostbackLog[];
 }
 
+export interface Lead {
+  id: string;
+  conversionId: string;
+  clickId: string;
+  campaignId: string;
+  campaign: { name: string; slug: string } | null;
+  source: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  zip?: string | null;
+  state?: string | null;
+  answers?: Record<string, string> | null;
+  consentText?: string | null;
+  consentHash?: string | null;
+  consentAt?: string | null;
+  purgedAt?: string | null;
+  erasedAt?: string | null;
+  ip?: string | null;
+  userAgent?: string | null;
+  pageUrl?: string | null;
+  isTest: boolean;
+  createdAt: string;
+}
+
 export interface PostbackLog {
   id: string;
   network: string;
@@ -900,6 +926,17 @@ export const trackerApi = {
   getClicks: (params?: Record<string, string>) => {
     const qs = params ? `?${new URLSearchParams(params)}` : '';
     return api<{ items: Click[]; total: number }>(`/api/clicks${qs}`);
+  },
+  getLeads: (params?: Record<string, string>) => {
+    const qs = params ? `?${new URLSearchParams(params)}` : '';
+    return api<{ items: Lead[]; total: number }>(`/api/leads${qs}`);
+  },
+  deleteLead: (id: string) => api<{ deleted: boolean; conversionsScrubbed?: number }>(`/api/leads/${id}`, { method: 'DELETE' }),
+  exportLeadsCsv: async (params?: Record<string, string>) => {
+    const qs = params ? `?${new URLSearchParams(params)}` : '';
+    const res = await fetch(`/api/admin/leads/export/csv${qs}`);
+    if (!res.ok) throw new Error(await res.text());
+    return res.text();
   },
   getConversions: (params?: Record<string, string>) => {
     const qs = params ? `?${new URLSearchParams(params)}` : '';

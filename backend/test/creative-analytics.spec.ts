@@ -67,8 +67,11 @@ describe('CreativeAnalyticsService', () => {
       { eventType: 'call_click', countMode: 'recorded' },
     );
 
+    // `call_started` est le MÊME pas de l'entonnoir que `call_click` : même libellé, même code Mediago 12, même
+    // événement Meta. Les deux noms circulent parce que deux intégrations les envoient différemment ; ne compter
+    // que le premier sous-compterait les appels d'une source entière. Le test ne connaissait qu'un des deux noms.
     expect(convWhere).toMatchObject({
-      eventType: { in: ['call_click'] },
+      eventType: { in: ['call_click', 'call_started'] },
     });
     expect(convWhere).not.toHaveProperty('status');
     expect(report.selectedEvent.totalEvents).toBe(2);
