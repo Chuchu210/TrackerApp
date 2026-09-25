@@ -46,6 +46,7 @@ x-api-key: <your key>
 | `lastName` | string | ″ | 120 | Stored clipped to 100. |
 | `email` | string | ″ | 200 | Lower-cased. `Ann Dupont <ann@example.com>` is read as `ann@example.com`. Must look like an address, or it is dropped. |
 | `phone` | string | ″ | 40 | Any format: `(813) 555-0142`, `813-555-0142`, `+1 813 555 0142`. Stored as digits; a US leading `1` is removed, and a trailing extension (`x204`, `ext. 204`) is dropped. Must end up with 7–15 digits. |
+| `country` | string | no | 2 | The person's country, ISO 3166 two letters (`FR`, `GB`, `DE`, `US`). It tells us how to read a `phone` written **without** its country code (`0612345678` is `+33 6 12 34 56 78` in France). Leave it out and your site's country (set on our side with your key) applies; neither, and the number is kept as written. We never guess it. See §9. |
 | `zip` | string | no | 20 | Stored clipped to 10. |
 | `state` | string | no | 80 | Stored clipped to 40. |
 | `answers` | object | no | — | Quiz/form answers. See §4. |
@@ -311,9 +312,21 @@ $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);   // 201 = handled; 429/5xx = ret
     North-American number is recognised in any usual formatting: `+1`, `001` and `1-` prefixes, and an extension
     (`x12`, `x.12`, `ext. 4`, `Ext: 12`, `extn 12`, `extension 1234`, `;ext=12`, `;phone-context=+1`), are not part
     of the number. A **foreign** number is recognised with its `+` or `00` country code, with or without the
-    national `(0)` (`+44 (0)7911 123456` and `+44 7911 123456` are the same person); written in its national form
-    only (`07911 123456`), it is a different string and is **not** matched with its international form — send it
-    with its country code. A foreign number is read with the national lengths of its country (the Brazilian mobile
+    national `(0)` (`+44 (0)7911 123456` and `+44 7911 123456` are the same person). **Written in its national form
+    only** (`07911 123456`, `0612345678`), it is matched with its international form **when the country is known**
+    — the `country` of the send, else the country of your site (set with your key, §10) — and only then: `0612345678`
+    from a French site is `+33 6 12 34 56 78`; from a site with no country it stays `0612345678`, never guessed. The
+    national trunk `0` is dropped and the country code added (France, United Kingdom, Germany, Belgium, Netherlands,
+    Switzerland, Austria, Sweden, Ireland, Australia, New Zealand); in Italy, Spain and Portugal the national number is
+    kept whole behind the code (`06…` in Rome stays `+39 06…`); North-American ten-digit numbers are already in their
+    usual form and never change. Where a national form could equally be a number of another country once stored — an
+    Italian mobile (`3…`, ten digits, the shape of a North-American number) — it is left as written: send it with
+    `+39`. An erasure records such a number **as written and** in its international form, using the country of the
+    visit it came from; a send is compared under the same two forms. The written form is exactly what we compared
+    before this rule (September 2026), so it refuses no one new; the international form is the same number in the
+    same country. Two forms of one number are **one** contact, never a second signal (see below). Limit: a person
+    erased from a site with no country, under a national form, and who comes back with the `+` form, is not
+    recognised — give every site its country. A foreign number is read with the national lengths of its country (the Brazilian mobile
     `+55 11 91234-5678`, the German `+49 151 23456789` and `+49 30 12345678` included), and a `+CC` followed by one
     block (`+52 8135550142`) is that foreign number — never the North-American number the block alone would be.
     Separators include the ones keyboards and word processors produce: non-breaking and thin spaces, en dash,
@@ -360,7 +373,8 @@ $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);   // 201 = handled; 429/5xx = ret
     space, `**ann@…**`) are not part of it: the address is compared, and stored, without them. Characters an address
     may legally start with (`_ann@…`, `~ann@…`) are kept — `_ann@corp.example` and `ann@corp.example` are two
     mailboxes. We record **one faithful form** of each contact, never guessed variants: a guessed variant could
-    refuse someone else who later declares it;
+    refuse someone else who later declares it. The one exception is not a guess: a phone written in its national
+    form, when its country is known, is also recorded in its international form (above);
   - **inside a URL**, we read every parameter (`&` and `;` separate them), and also what is not a parameter: the
     path (`/confirm/ann@gmail.com`), the fragment (`#ann@gmail.com`, `#/merci/813-555-0142`) and a bare token
     (`?ann@gmail.com`). In a parameter, `+` means a space — **except when the whole value is one address with at
@@ -414,9 +428,17 @@ batching thousands of rows at once — ask us rather than working around it.
 
 ## 10. For the operator (our side, not the partner's)
 
-- Keys live in `INTAKE_API_KEYS` on the tracker: `"site:key,site:key"` — one entry per partner site.
-  `parseIntakeKeys` ignores an entry without both halves, and the route refuses everything while the variable is
-  empty (an `ERROR` line in the tracker log says so).
+- Keys live in `INTAKE_API_KEYS` on the tracker: `"site:key:CC,site:key:CC"` — one entry per partner site, `CC`
+  being the site's country (ISO 3166 two letters, `UK` accepted for `GB`), e.g.
+  `"monsite.fr:<key>:FR,autre.com:<key>:US"`. The country is **optional** and the old `"site:key"` format still
+  works (no country: phone numbers written without a country code are kept as written). **Set it for every site**:
+  it is what lets the suppression list match `0612345678` with `+33 6 12 34 56 78` (§9). A country is read only on
+  a final `:` followed by two letters, so a key must never end that way (`openssl rand -hex 32` never does); a key
+  may otherwise contain `:`. Two entries of the same site with two different countries apply none, and a country we
+  have no rule for (`MX`) changes nothing; both are reported by an `ERROR` line on each intake call. A send's own
+  `country` field takes precedence over the site's. Adding or changing a country needs no migration: the list
+  already reads both forms. `parseIntakeKeys` ignores an entry without both halves, and the route refuses everything
+  while the variable is empty (an `ERROR` line in the tracker log says so).
 - Never reuse `ADMIN_API_KEY` for a partner: that key also opens the lead list, the CSV export and deletion.
 - Generate a key with `openssl rand -hex 32`. Revoke by removing that one entry and restarting the API.
 - `ERASURE_HMAC_KEY` (32 characters at least, `openssl rand -hex 32`) keys the suppression list. **Never change it.**
@@ -430,7 +452,9 @@ batching thousands of rows at once — ask us rather than working around it.
   can come back), and `suppression: "failed"` when the list could not be written.
 - Code: `src/leads/intake-key.guard.ts`, `LeadsService.intake` in `src/leads/leads.service.ts`, DTO in
   `src/leads/dto/intake-lead.dto.ts`. Proofs: `test/intake-key.guard.spec.ts` and the intake block in
-  `test/leads.spec.ts`.
+  `test/leads.spec.ts`. National forms and site countries (`enFormeInternationale`, `formesDuNumero` in
+  `src/leads/lead-fields.ts`, `paysDuSite` in the guard): `test/leads-numero-national.pglite.spec.ts`, end to end
+  on Postgres.
 - **One detector** (`detecter` in `src/leads/lead-fields.ts`, round 31): for a value under a key it returns every
   contact it reads, with its exact place (start, end) in the stored value. The suppression list records what those
   spans contain; every scrub — `withoutContact` (conversion metadata, landing parameters), `redactPersonal`,

@@ -9,6 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { timingSafeEqual } from 'crypto';
 import { Request } from 'express';
+import { codePays, paysAvecRegle } from './lead-fields';
 
 /**
  * La clé qui ouvre la porte d'entrée des leads externes — et RIEN D'AUTRE.
@@ -19,7 +20,9 @@ import { Request } from 'express';
  *
  * UNE CLÉ PAR SITE, et le site vient DE LA CLÉ, pas du corps de la requête :
  *
- *     INTAKE_API_KEYS="monsite.com:aBc…,autresite.fr:dEf…"
+ *     INTAKE_API_KEYS="monsite.com:aBc…,autresite.fr:dEf…:FR"
+ *
+ * (Le « :FR » final, facultatif, est le pays du site : voir `parseIntakeKeys`.)
  *
  * Deux conséquences, et ce sont les deux raisons de ce fichier : on révoque un partenaire sans couper les autres,
  * et un partenaire ne peut pas déposer des leads en se faisant passer pour un autre — ce qui fausserait les
@@ -55,6 +58,8 @@ export class IntakeKeyGuard implements CanActivate {
           'leads du premier lui sont attribués',
       );
     }
+    const douteux = paysDouteux(this.config.get<string>('INTAKE_API_KEYS'));
+    if (douteux.length) this.logger.error(`INTAKE_API_KEYS : pays sans effet — ${douteux.join(', ')}`);
     if (!presented) {
       this.refus(request, 'aucune clé présentée');
       throw new UnauthorizedException('Invalid intake key');
@@ -102,8 +107,16 @@ export function duplicateIntakeKeys(raw: string | undefined): string[] {
   return [...vues.values()].filter((sites) => sites.length > 1).map((sites) => sites.join(" + "));
 }
 
-/** « site:clé,site:clé ». Une entrée sans les deux moitiés n'existe pas : une clé vide ouvrirait la porte. */
-export function parseIntakeKeys(raw: string | undefined): { site: string; key: string }[] {
+/**
+ * « site:clé,site:clé », et, facultatif, le pays du site : « site:clé:FR ». Une entrée sans les deux moitiés n'existe
+ * pas : une clé vide ouvrirait la porte.
+ *
+ * LE PAYS (défaut du 20/09) : un lead qui écrit « 0612345678 » sans indicatif ne dit pas de quel pays il est, et la
+ * liste de suppression ne le rapprochait pas de « +33 6 12 34 56 78 ». Le pays du site le dit. Il se lit sur un
+ * dernier « :XX » de deux lettres ; sans lui, rien ne change (l'ancien format reste valable). Une clé ne se termine
+ * donc jamais par « : » suivi de deux lettres — `openssl rand -hex 32` n'en produit pas.
+ */
+export function parseIntakeKeys(raw: string | undefined): { site: string; key: string; pays?: string }[] {
   return (raw ?? '')
     .split(',')
     .map((chunk) => {
@@ -112,10 +125,35 @@ export function parseIntakeKeys(raw: string | undefined): { site: string; key: s
       // c'est dit ici pour que personne ne prenne ces deux lignes pour deux protections là où il y en a une.
       if (at <= 0) return null;
       const site = slugSite(chunk.slice(0, at));
-      const key = chunk.slice(at + 1).trim();
-      return site && key ? { site, key } : null;
+      const reste = chunk.slice(at + 1).trim();
+      const avecPays = /^(.*\S)\s*:\s*([A-Za-z]{2})$/.exec(reste);
+      const key = avecPays ? avecPays[1] : reste;
+      const pays = avecPays ? codePays(avecPays[2]) : null;
+      if (!site || !key) return null;
+      return pays ? { site, key, pays } : { site, key };
     })
-    .filter((e): e is { site: string; key: string } => e !== null);
+    .filter((e): e is { site: string; key: string; pays?: string } => e !== null);
+}
+
+/**
+ * Le pays d'un site partenaire, tel que `INTAKE_API_KEYS` le déclare — ou null. Deux entrées du même site (une clé
+ * en rotation) qui déclarent deux pays différents ne désignent AUCUN pays : on ne choisit pas au hasard.
+ */
+export function paysDuSite(raw: string | undefined, site: string): string | null {
+  const nom = slugSite(site);
+  const pays = new Set(parseIntakeKeys(raw).filter((e) => e.site === nom && e.pays).map((e) => e.pays as string));
+  return pays.size === 1 ? [...pays][0] : null;
+}
+
+/** Les pays déclarés dans `INTAKE_API_KEYS` qu'aucune règle ne sait lire, et les sites qui en déclarent deux. */
+export function paysDouteux(raw: string | undefined): string[] {
+  const entrees = parseIntakeKeys(raw);
+  const inconnus = entrees.filter((e) => e.pays && !paysAvecRegle(e.pays)).map((e) => `${e.site} (${e.pays} : pas de règle, numéros laissés tels qu'écrits)`);
+  const sites = [...new Set(entrees.map((e) => e.site))];
+  const contradictoires = sites
+    .filter((s) => new Set(entrees.filter((e) => e.site === s && e.pays).map((e) => e.pays)).size > 1)
+    .map((s) => `${s} (deux pays : aucun n'est appliqué)`);
+  return [...inconnus, ...contradictoires];
 }
 
 /** Le nom du site, réduit à ce qui peut servir de repère : « MonSite.com » et « monsite.com » sont le même. */

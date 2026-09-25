@@ -121,6 +121,16 @@ export class IntakeLeadDto {
   @IsOptional() @IsString() @MaxUnits(120) lastName?: string;
   @IsOptional() @IsString() @MaxUnits(200) email?: string;
   @IsOptional() @IsString() @MaxUnits(40) phone?: string;
+
+  /**
+   * Le pays de la personne (ISO 3166, deux lettres : « FR », « GB », « US »), s'il est connu. Il dit comment lire un
+   * `phone` écrit sans indicatif (« 0612345678 » est +33 6 12 34 56 78 en France) ; absent, c'est le pays du site
+   * (configuré avec la clé) ; aucun des deux, le numéro reste tel qu'écrit. Jamais deviné.
+   */
+  @IsOptional()
+  @IsString()
+  @Matches(/^\s*[A-Za-z]{2}\s*$/, { message: 'country : un code pays ISO à deux lettres, par exemple FR' })
+  country?: string;
   @IsOptional() @IsString() @MaxUnits(20) zip?: string;
   @IsOptional() @IsString() @MaxUnits(80) state?: string;
 

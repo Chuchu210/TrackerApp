@@ -6,10 +6,14 @@ import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { paysDuSite } from './intake-key.guard';
 import {
   CONTACT_EVENT_TYPES,
+  codePays,
   csvCell,
+  empreintesDuContact,
   errorLabel,
+  memeNumeroQuelquePart,
   contactFingerprints,
   contactsInAnything,
   declaredContactsIn,
@@ -95,6 +99,12 @@ const RESERVES_DANS_LES_REPONSES = new Set([
 ]);
 
 /** Les réponses du partenaire, débarrassées des noms réservés — qui sont écartés, pas renommés en silence. */
+/**
+ * Un contact tel que la liste de suppression le lit, avec le pays qui dit comment lire un numéro écrit sans
+ * indicatif (null : inconnu, le numéro reste tel qu'écrit).
+ */
+type ContactLu = { phone?: string | null; email?: string | null; pays?: string | null };
+
 export function alias(answers: Record<string, unknown> | undefined | null): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [cle, valeur] of Object.entries(answers ?? {})) {
@@ -283,7 +293,7 @@ export class LeadsService {
    */
   private async rememberErased(
     visits: string[],
-    extra: { phone?: string | null; email?: string | null }[],
+    extra: { phone?: string | null; email?: string | null; clickId?: string }[],
   ): Promise<'recorded' | 'nothing' | 'failed' | 'partial'> {
     try {
       // La lecture des visites sœurs est DANS le try : si elle échoue, c'est l'inscription qui échoue — et c'est
@@ -291,10 +301,13 @@ export class LeadsService {
       const { declares, trouves, complet } = await this.contactsOfVisits(visits, extra);
       const cle = await this.cleVerifiee();
       // DÉCLARÉ D'ABORD : si le même numéro est à la fois déclaré et trouvé, c'est le déclaré qui s'inscrit.
+      // AVEC LE PAYS DE SA VISITE (défaut du 20/09) : un numéro national (« 0612345678 ») d'une visite dont le pays est
+      // connu s'inscrit tel qu'écrit ET sous sa forme internationale (33612345678) — la règle même du contrôle d'entrée
+      // (`formesDuNumero`), pour que la personne qui revient avec l'autre écriture soit reconnue.
       const vus = new Set<string>();
       const marques = [
-        ...declares.flatMap((c) => contactFingerprints(c, cle)),
-        ...trouves.flatMap((c) => contactFingerprints(c, cle)).map((m) => ({ ...m, kind: `${m.kind}_texte` })),
+        ...declares.flatMap((c) => contactFingerprints(c, cle, c.pays)),
+        ...trouves.flatMap((c) => contactFingerprints(c, cle, c.pays)).map((m) => ({ ...m, kind: `${m.kind}_texte` })),
       ].filter((m) => (vus.has(m.hash) ? false : (vus.add(m.hash), true)));
       if (!complet) {
         this.logger.warn('Suppression list: some visit or conversion data was too large to read in full');
@@ -333,49 +346,83 @@ export class LeadsService {
    */
   private async contactsOfVisits(
     visits: string[],
-    extra: { phone?: string | null; email?: string | null }[] = [],
-  ): Promise<{
-    declares: { phone?: string | null; email?: string | null }[];
-    trouves: { phone?: string | null; email?: string | null }[];
-    complet: boolean;
-  }> {
-    if (visits.length === 0) return { declares: [...extra], trouves: [], complet: true };
+    extra: { phone?: string | null; email?: string | null; clickId?: string }[] = [],
+  ): Promise<{ declares: ContactLu[]; trouves: ContactLu[]; complet: boolean }> {
+    const sansVisite = (c: { phone?: string | null; email?: string | null; clickId?: string }): ContactLu => ({
+      phone: c.phone,
+      email: c.email,
+      pays: c.clickId ? this.paysDeLaVisite(c.clickId, undefined) : null,
+    });
+    if (visits.length === 0) return { declares: extra.map(sansVisite), trouves: [], complet: true };
     // LES MÊMES COLONNES QUE LE NETTOYAGE, parce qu'elles viennent du MÊME registre (`lead-columns.ts`, tour 32) :
     // la ligne de visite ENTIÈRE se lisait ici, et `scrubClicks` ne touchait ni `utm_term` ni `ad_title` — une adresse
     // lue, inscrite, et laissée en base (juré r13). Désormais on ne lit QUE les colonnes classées « contact » ou
     // « url », sous le nom de leur colonne — la clé sous laquelle le nettoyage les caviarde.
+    // `clickId` en plus : le pays d'une ligne est celui de SA visite (`paysDeLaVisite`).
     const [lignes, visites, conversions] = await Promise.all([
-      this.prisma.lead.findMany({ where: { clickId: { in: visits } }, select: selectionLue('leads') }),
-      this.prisma.click.findMany({ where: { clickId: { in: visits } }, select: selectionLue('clicks') }),
-      this.prisma.conversion.findMany({ where: { clickId: { in: visits } }, select: selectionLue('conversions', ['eventType']) }),
+      this.prisma.lead.findMany({ where: { clickId: { in: visits } }, select: selectionLue('leads', ['clickId']) }),
+      this.prisma.click.findMany({ where: { clickId: { in: visits } }, select: selectionLue('clicks', ['clickId']) }),
+      this.prisma.conversion.findMany({
+        where: { clickId: { in: visits } },
+        select: selectionLue('conversions', ['eventType', 'clickId']),
+      }),
     ]);
+    // Le pays de chaque visite : ce qu'elle a déclaré (sa ligne de visite), sinon celui de son site.
+    const parametres = new Map<string, unknown>();
+    for (const v of visites as Record<string, unknown>[]) {
+      if (typeof v.clickId === 'string') parametres.set(v.clickId, v.rawParams);
+    }
+    const paysDe = (ligne: Record<string, unknown>): string | null =>
+      typeof ligne.clickId === 'string' ? this.paysDeLaVisite(ligne.clickId, parametres.get(ligne.clickId)) : null;
+    const avecPays = (pays: string | null) => (c: { phone?: string | null; email?: string | null }): ContactLu => ({
+      phone: c.phone,
+      email: c.email,
+      pays,
+    });
     // LIGNE PAR LIGNE, les conversions d'abord : un budget unique sur l'ensemble s'épuisait sur les en-têtes de
     // cinq cents visites, et le `contact_email` d'une conversion n'était jamais lu — sans que rien ne le dise.
-    const declares: { phone?: string | null; email?: string | null }[] = [
-      ...extra,
-      ...(lignes as Record<string, unknown>[]).map((l) => contactDeclare('leads', l)),
+    const declares: ContactLu[] = [
+      ...extra.map((c) =>
+        avecPays(c.clickId ? this.paysDeLaVisite(c.clickId, parametres.get(c.clickId)) : null)(c),
+      ),
+      ...(lignes as Record<string, unknown>[]).map((l) => avecPays(paysDe(l))(contactDeclare('leads', l))),
     ];
-    const trouves: { phone?: string | null; email?: string | null }[] = [];
+    const trouves: ContactLu[] = [];
     let complet = true;
     const lignesLues = [
       ...(conversions as Record<string, unknown>[]).map((c) => ({
         ligne: ligneLue('conversions', c),
         deContact: isContactEvent(String(c.eventType ?? '')),
+        pays: paysDe(c),
       })),
-      ...(visites as Record<string, unknown>[]).map((v) => ({ ligne: ligneLue('clicks', v), deContact: true })),
-      ...(lignes as Record<string, unknown>[]).map((l) => ({ ligne: ligneLue('leads', l), deContact: true })),
+      ...(visites as Record<string, unknown>[]).map((v) => ({ ligne: ligneLue('clicks', v), deContact: true, pays: paysDe(v) })),
+      ...(lignes as Record<string, unknown>[]).map((l) => ({ ligne: ligneLue('leads', l), deContact: true, pays: paysDe(l) })),
     ];
-    for (const { ligne, deContact } of lignesLues) {
+    for (const { ligne, deContact, pays } of lignesLues) {
       const lu = lireContacts(ligne);
       // DÉCLARER, c'est un événement de CONTACT qui le fait (formulaire, rappel) — ou la visite elle-même (`?phone=`
       // de sa page d'atterrissage). Un `call_click` porte dans `phone` NOTRE numéro de suivi, celui du bouton d'appel
       // (juré r8) : déclaré, il faisait refuser tous ceux qui l'écrivent ensuite. Une conversion d'un autre type, ou
       // sans type, est lue comme « trouvée ».
-      if (deContact) declares.push(...lu.declares);
-      trouves.push(...lu.tous);
+      if (deContact) declares.push(...lu.declares.map(avecPays(pays)));
+      trouves.push(...lu.tous.map(avecPays(pays)));
       complet &&= lu.complet;
     }
     return { declares, trouves, complet };
+  }
+
+  /**
+   * Le pays d'une visite, pour lire un numéro écrit sans indicatif — LES MÊMES SOURCES qu'à l'entrée (`intake`) :
+   * le pays que le lead a déclaré (gardé dans les paramètres de sa visite), puis celui de son site partenaire
+   * (`INTAKE_API_KEYS`). Seule une visite d'intake (`ext_<site>_…`) en a un : pour les autres, l'IP ne dit pas le pays
+   * d'un numéro, et on ne devine pas.
+   */
+  private paysDeLaVisite(clickId: string, rawParams: unknown): string | null {
+    const site = /^ext_([a-z0-9.-]+)_/.exec(clickId)?.[1];
+    if (!site) return null;
+    const params = rawParams && typeof rawParams === 'object' ? (rawParams as Record<string, unknown>) : {};
+    const declare = params.source === site ? codePays(params.country) : null;
+    return declare ?? paysDuSite(this.config.get<string>('INTAKE_API_KEYS'), site);
   }
 
   private cleOk: string | null = null;
@@ -411,9 +458,16 @@ export class LeadsService {
    * dans l'envoi. Un refus exige qu'un côté au moins soit déclaré : deux formes trouvées qui coïncident — le même
    * identifiant de campagne dans deux URL, le même créneau horaire — ne désignent pas la même personne (juré r5).
    */
+  /**
+   * `pays` (défaut du 20/09) : le pays de l'envoi, s'il est connu — celui que le lead déclare, sinon celui du site.
+   * Un numéro écrit sans indicatif est alors cherché sous ses DEUX formes (`formesDuNumero`) : telle qu'écrite — la
+   * comparaison d'avant, qui retrouve les empreintes inscrites sous cette forme — et internationale, le même numéro
+   * dans le même pays. Sans pays, une seule forme : on ne devine pas.
+   */
   async isErasedPerson(
     declares: { phone?: string | null; email?: string | null }[],
     trouves: { phone?: string | null; email?: string | null }[] = [],
+    pays: string | null = null,
   ): Promise<boolean> {
     // Sans clé valide, la liste n'a rien pu noter et ne peut rien lire : la protection promise n'existe pas. On
     // refuse d'entrer en 503 — le partenaire réessaiera — plutôt que de recréer, peut-être, une personne effacée.
@@ -426,9 +480,23 @@ export class LeadsService {
         'ERASURE_HMAC_KEY absente, trop courte ou changée : liste de suppression indisponible, lead non stocké',
       );
     }
-    const empreintes = (contacts: { phone?: string | null; email?: string | null }[]) => [
-      ...new Set(contacts.flatMap((c) => contactFingerprints(c, cle)).map((m) => m.hash)),
-    ];
+    // Chaque empreinte cherchée, avec le(s) contact(s) de l'envoi qui l'ont produite : deux FORMES d'un même numéro
+    // (0612345678 et 33612345678) sont un seul contact, pas deux signaux.
+    const contactsDe = new Map<string, Set<string>>();
+    const empreintes = (contacts: { phone?: string | null; email?: string | null }[]) => {
+      const hashes = new Set<string>();
+      for (const m of contacts.flatMap((c) => empreintesDuContact(c, cle, pays))) {
+        hashes.add(m.hash);
+        contactsDe.set(m.hash, (contactsDe.get(m.hash) ?? new Set<string>()).add(m.contact));
+      }
+      return [...hashes];
+    };
+    const memeContact = (x: string, y: string) =>
+      x === y || (x.startsWith('phone:') && y.startsWith('phone:') && memeNumeroQuelquePart(x.slice(6), y.slice(6)));
+    // Un AUTRE contact de l'envoi : pas la même empreinte, et pas une autre forme du même numéro. Avant, deux empreintes
+    // différentes étaient toujours deux contacts ; une forme de plus ne doit pas fabriquer un second signal.
+    const autreContact = (a: string, b: string) =>
+      a !== b && [...(contactsDe.get(a) ?? [])].some((x) => [...(contactsDe.get(b) ?? [])].some((y) => !memeContact(x, y)));
     const deDeclares = empreintes(declares);
     const deTrouves = empreintes(trouves).filter((h) => !deDeclares.includes(h));
     const tous = [...new Set([...deDeclares, ...deTrouves])];
@@ -450,7 +518,7 @@ export class LeadsService {
         // son propre lead, était refusé. Le numéro trouvé ne refuse que si un AUTRE contact de l'envoi (déclaré ou
         // trouvé) correspond au MÊME effacement. Le prix, écrit dans la doc §9 : une personne dont le numéro n'était
         // QUE dans un texte, et qui revient avec ce seul numéro, n'est pas reconnue.
-        if (lignes.some((m) => m.hash !== l.hash && m.groupe === l.groupe)) return true;
+        if (lignes.some((m) => m.groupe === l.groupe && autreContact(m.hash, l.hash))) return true;
       } else if (declaree(l.kind)) {
         // Trouvé à l'entrée : seulement contre ce que la liste tient d'une DÉCLARATION.
         return true;
@@ -517,7 +585,7 @@ export class LeadsService {
     // supprimés — et c'est alors trop tard pour reconnaître cette personne si elle revient par une autre porte.
     // C'est le défaut que le juré a reproduit : un lead externe arrive avec un identifiant neuf, aucune pierre
     // tombale ne s'y rattache, et la personne effacée était recréée avec son contact complet.
-    const suppression = await this.rememberErased(visits, [{ phone: lead.phone, email: lead.email }]);
+    const suppression = await this.rememberErased(visits, [{ phone: lead.phone, email: lead.email, clickId: lead.clickId }]);
     await this.tombstoneVisits(visits, now, lead.campaignId, { isTest: lead.isTest, createdAt: lead.createdAt });
     await this.prisma.$transaction(async (tx) => {
       await tx.lead.update({
@@ -639,8 +707,14 @@ export class LeadsService {
     // `answers.contact_email`, par « Ann <ann@…> » et par un numéro à extension : chaque fois le contact entrait
     // en clair dans la conversion sans être comparé. Le consentement, lui, n'est pas lu : il porte souvent le
     // numéro de l'ANNONCEUR, et une personne effacée qui l'aurait vu bloquerait tous les leads de ce texte.
+    // LE PAYS DE L'ENVOI (défaut du 20/09) : celui que le lead déclare, sinon celui du site partenaire, configuré avec
+    // sa clé — sinon aucun. Avec lui, « 0612345678 » est aussi cherché comme 33612345678 : Marie, effacée après être
+    // venue avec « +33 6 12 34 56 78 », ne revient plus par l'écriture nationale.
+    const paysDeclare = codePays(dto.country);
+    const pays = paysDeclare ?? paysDuSite(this.config.get<string>('INTAKE_API_KEYS'), site);
     const envoi = { email: dto.email, phone: dto.phone, answers: dto.answers, pageUrl: dto.pageUrl };
-    if (await this.isErasedPerson([contact, ...declaredContactsIn(envoi)], contactsInAnything(envoi))) {
+    // Le numéro rangé, lui, reste tel qu'écrit : l'effacement le relit avec le pays de la visite (`paysDeLaVisite`).
+    if (await this.isErasedPerson([contact, ...declaredContactsIn(envoi)], contactsInAnything(envoi), pays)) {
       this.logger.warn(`Intake from ${site} refused: erased person`);
       return { stored: false, clickId: '', campaignId: '', reason: 'erased_person' };
     }
@@ -681,7 +755,9 @@ export class LeadsService {
         ipAddress: dto.ip ?? null,
         userAgent: dto.userAgent ?? null,
         referrer: dto.pageUrl ?? null,
-        rawParams: { source: site, external_id: dto.externalId ?? null } as Prisma.InputJsonValue,
+        // Le pays DÉCLARÉ par le lead reste avec sa visite : l'effacement doit lire ses numéros comme l'entrée les a
+        // lus (`paysDeLaVisite`). Celui du site, lui, se relit dans la configuration.
+        rawParams: { source: site, external_id: dto.externalId ?? null, ...(paysDeclare ? { country: paysDeclare } : {}) } as Prisma.InputJsonValue,
       },
     });
 
@@ -855,7 +931,7 @@ export class LeadsService {
     });
     // SUR CE CHEMIN AUSSI, et avant la moindre écriture. La personne n'a pas de ligne de lead : son contact vit
     // dans `rawParams`. Le juré l'a mesuré — zéro inscription, puis « stored: true » quand elle revenait.
-    const suppression = await this.rememberErased(visits, [{ phone: carried.phone, email: carried.email }]);
+    const suppression = await this.rememberErased(visits, [{ phone: carried.phone, email: carried.email, clickId }]);
     try {
       await this.prisma.lead.create({
         data: {

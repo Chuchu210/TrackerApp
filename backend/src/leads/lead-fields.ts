@@ -72,8 +72,18 @@ function cleNonLue(cle: string): boolean {
   return CLES_NON_LUES.has(cle.toLowerCase().replace(/[^a-z]/g, ''));
 }
 
-/** Digits only; a leading US country code is dropped. Anything that cannot be a phone number is null. */
-export function normalizePhone(raw: unknown): string | null {
+/**
+ * Digits only; a leading US country code is dropped. Anything that cannot be a phone number is null.
+ *
+ * `pays` : le pays du contact quand l'indicatif n'est pas écrit (voir `enFormeInternationale`). Absent, le numéro
+ * reste tel qu'écrit : on ne devine jamais un pays.
+ */
+export function normalizePhone(raw: unknown, pays?: string | null): string | null {
+  const lu = normalizePhoneSansPays(raw);
+  return pays ? enFormeInternationale(lu, pays) : lu;
+}
+
+function normalizePhoneSansPays(raw: unknown): string | null {
   // Le préfixe international « 00 » est la même chose que « + » : « 001 813 555 0142 » est le numéro que
   // « +1 813 555 0142 » écrit autrement. Sans ce retrait, la même personne avait deux formes, donc deux identités
   // pour la déduplication comme pour la liste de suppression.
@@ -116,6 +126,116 @@ function sansPrefixeNational(chiffres: string): string {
 }
 
 /**
+ * LE PAYS D'UN CONTACT QUI N'ÉCRIT PAS SON INDICATIF (défaut reproduit en production le 20/09). Marie arrive avec
+ * « +33 6 12 34 56 78 », rangée 33612345678 ; effacée, elle revient avec « 0612345678 » — le même numéro, écrit
+ * comme en France on l'écrit — et passait : sans le pays, 0612345678 et 33612345678 sont deux chaînes, donc deux
+ * empreintes. Le pays vient de ce qu'on SAIT (le pays déclaré du lead, puis celui du site partenaire, configuré avec
+ * sa clé) — jamais d'une devinette : sans pays connu, le numéro reste tel qu'écrit.
+ *
+ * `tronc` : le numéro national commence par un 0 que l'on ne compose pas depuis l'étranger (il est retiré, comme
+ * `sansPrefixeNational` le retire après un indicatif écrit — chaque indicatif « tronc » ici est dans `TRONC_ZERO`).
+ * Sans tronc (Italie, Espagne, Portugal), le numéro national est ajouté tel quel derrière l'indicatif, et `premiers`
+ * dit par quoi il peut commencer. Les longueurs nationales viennent de `CHIFFRES_NATIONAUX`. Le plan
+ * nord-américain (US, CA) écrit déjà ses numéros à dix chiffres, la forme rangée : rien ne change.
+ */
+interface PlanNational {
+  indicatif: string;
+  tronc: boolean;
+  premiers?: RegExp;
+}
+const PLANS_NATIONAUX: Record<string, PlanNational> = {
+  FR: { indicatif: '33', tronc: true },
+  GB: { indicatif: '44', tronc: true },
+  DE: { indicatif: '49', tronc: true },
+  BE: { indicatif: '32', tronc: true },
+  NL: { indicatif: '31', tronc: true },
+  CH: { indicatif: '41', tronc: true },
+  AT: { indicatif: '43', tronc: true },
+  SE: { indicatif: '46', tronc: true },
+  IE: { indicatif: '353', tronc: true },
+  AU: { indicatif: '61', tronc: true },
+  NZ: { indicatif: '64', tronc: true },
+  // En Italie le 0 d'un fixe APPARTIENT au numéro (+39 06… pour Rome). Un mobile commence par 3 — comme un numéro
+  // déjà international rangé (33…, 39…, 44…) : il n'est donc PAS converti, sans quoi « 33612345678 » (Marie, écrite
+  // avec son +33) deviendrait italien sur un site italien. Un mobile italien doit arriver avec son +39.
+  IT: { indicatif: '39', tronc: false, premiers: /^0/ },
+  ES: { indicatif: '34', tronc: false, premiers: /^[6-9]/ },
+  PT: { indicatif: '351', tronc: false, premiers: /^[29]/ },
+  US: { indicatif: '1', tronc: false },
+  CA: { indicatif: '1', tronc: false },
+};
+/** Les noms d'usage d'un code ISO : « UK » est le Royaume-Uni, dont le code ISO est GB. */
+const ALIAS_PAYS: Record<string, string> = { UK: 'GB' };
+
+/** Un code pays ISO 3166 à deux lettres, en capitales (« fr » → « FR », « UK » → « GB ») ; autre chose → null. */
+export function codePays(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const code = raw.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return null;
+  return ALIAS_PAYS[code] ?? code;
+}
+
+/** Ce pays a-t-il une règle de forme nationale ? Un pays sans règle laisse le numéro tel qu'écrit. */
+export function paysAvecRegle(pays: unknown): boolean {
+  const code = codePays(pays);
+  return !!code && code in PLANS_NATIONAUX;
+}
+
+/** Dix chiffres de la forme nord-américaine : ce que devient « +1 312 345 6789 » une fois rangé (le « 1 » tombé). */
+const FORME_NANP_RANGEE = /^[2-9]\d{2}[2-9]\d{6}$/;
+
+/**
+ * Un numéro RANGÉ (la sortie de `normalizePhone` sans pays) ramené à sa forme internationale, le pays étant connu.
+ * « 0612345678 » + FR → 33612345678 ; « 07911123456 » + GB → 447911123456. Un numéro déjà international
+ * (33612345678, ou 8135550142 venu d'un « +1 ») ne commence pas par le 0 national : il ne bouge pas.
+ *
+ * Idempotente, et sans perte pour les pays à tronc : un numéro rangé ne commence par 0 que s'il a été écrit sans
+ * indicatif. Sans tronc, la longueur nationale et le premier chiffre tiennent à l'écart les numéros déjà
+ * internationaux ; et un numéro rangé à dix chiffres de forme nord-américaine, qui peut être un « +1 » dont le 1 est
+ * tombé, reste tel quel.
+ */
+export function enFormeInternationale(numero: string | null, pays: unknown): string | null {
+  if (!numero) return numero;
+  const code = codePays(pays);
+  const plan = code ? PLANS_NATIONAUX[code] : undefined;
+  if (!plan || plan.indicatif === '1') return numero;
+  let national: string | null = null;
+  if (plan.tronc) {
+    if (/^0[1-9]/.test(numero)) national = numero.slice(1);
+  } else if (plan.premiers?.test(numero) && !FORME_NANP_RANGEE.test(numero)) {
+    national = numero;
+  }
+  const bornes = CHIFFRES_NATIONAUX[plan.indicatif];
+  if (!national || !bornes || national.length < bornes[0] || national.length > bornes[1]) return numero;
+  const international = plan.indicatif + national;
+  return international.length <= 15 ? international : numero;
+}
+
+/**
+ * Les formes sous lesquelles la liste de suppression inscrit ET cherche un numéro : telle qu'écrite (rangée sans
+ * pays, la forme de toujours — celle des empreintes déjà inscrites, et celle qu'un site sans pays produit encore),
+ * puis, le pays connu, sa forme internationale. La seconde désigne le MÊME numéro dans le MÊME pays : elle ne peut
+ * refuser que quelqu'un qui a ce numéro-là. La première est exactement ce que la liste comparait avant : elle ne
+ * refuse personne de plus.
+ */
+export function formesDuNumero(raw: unknown, pays?: unknown): string[] {
+  const lu = normalizePhoneSansPays(raw);
+  if (!lu) return [];
+  const international = enFormeInternationale(lu, pays);
+  return international && international !== lu ? [lu, international] : [lu];
+}
+
+/**
+ * Deux numéros rangés sont-ils, dans UN pays au moins, le même numéro (« 0612345678 » et « 33612345678 » en France) ?
+ * Sert au « second signal » : deux formes du même numéro ne sont pas deux contacts. Au doute, c'est le même — c'est
+ * le sens qui ne refuse personne de plus.
+ */
+export function memeNumeroQuelquePart(a: string, b: string): boolean {
+  if (a === b) return true;
+  return Object.keys(PLANS_NATIONAUX).some((pays) => enFormeInternationale(a, pays) === enFormeInternationale(b, pays));
+}
+
+/**
  * L'empreinte à sens unique d'un contact, pour la liste de suppression.
  *
  * Ni le numéro ni l'adresse ne survivent à un effacement — on ne peut donc pas reconnaître la personne qui
@@ -125,7 +245,21 @@ function sansPrefixeNational(chiffres: string): string {
 export function contactFingerprints(
   contact: { phone?: string | null; email?: string | null },
   key: string,
+  pays?: string | null,
 ): { hash: string; kind: string }[] {
+  return empreintesDuContact(contact, key, pays).map(({ hash, kind }) => ({ hash, kind }));
+}
+
+/**
+ * Les empreintes d'un contact, chacune avec le contact qui l'a produite (`contact` : « phone:<numéro tel qu'écrit> »
+ * ou « email:<adresse> »). Un numéro dont le pays est connu en a DEUX (`formesDuNumero`) : l'effacement les inscrit
+ * toutes les deux et l'entrée les cherche toutes les deux — la même règle des deux côtés.
+ */
+export function empreintesDuContact(
+  contact: { phone?: string | null; email?: string | null },
+  key: string,
+  pays?: string | null,
+): { hash: string; kind: string; contact: string }[] {
   // UN HMAC À CLÉ SECRÈTE, PAS UN SHA-256 NU. Un numéro américain a dix chiffres : le juré a retrouvé un numéro
   // depuis son empreinte non salée en 30 secondes sur un seul cœur, et l'espace entier tient en trois heures. La
   // promesse « on ne peut ni l'appeler ni savoir qui c'est » était donc fausse. Avec une clé gardée HORS de la base,
@@ -136,13 +270,15 @@ export function contactFingerprints(
   if (!key || key.trim().length < 32) {
     throw new Error('ERASURE_HMAC_KEY absente ou trop courte (32 caractères au moins) : liste de suppression indisponible');
   }
-  const out: { hash: string; kind: string }[] = [];
-  const phone = normalizePhone(contact.phone);
+  const out: { hash: string; kind: string; contact: string }[] = [];
+  const formes = formesDuNumero(contact.phone, pays);
   const email = suppressionEmail(contact.email);
   // Les valeurs NORMALISÉES, pas celles écrites : « (813) 555-0142 » et « 8135550142 » sont la même personne, et
   // une empreinte posée sur la forme brute ne la reconnaîtrait pas sous l'autre.
-  if (phone) out.push({ hash: createHmac('sha256', key).update(`phone:${phone}`).digest('hex'), kind: 'phone' });
-  if (email) out.push({ hash: createHmac('sha256', key).update(`email:${email}`).digest('hex'), kind: 'email' });
+  for (const phone of formes) {
+    out.push({ hash: createHmac('sha256', key).update(`phone:${phone}`).digest('hex'), kind: 'phone', contact: `phone:${formes[0]}` });
+  }
+  if (email) out.push({ hash: createHmac('sha256', key).update(`email:${email}`).digest('hex'), kind: 'email', contact: `email:${email}` });
   return out;
 }
 
