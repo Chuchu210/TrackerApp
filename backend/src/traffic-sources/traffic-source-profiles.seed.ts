@@ -75,7 +75,7 @@ const TIKTOK_MAPPINGS: ParamMapping[] = [
 
 /**
  * Microsoft Ads (Bing). Auto-tagging appends msclkid; the Final URL suffix below carries Microsoft's own macros
- * ({Campaign}, {CampaignId}, {AdGroup}, {AdGroupId}, {AdId}, {keyword}, {MatchType}, {Device}, {Network}), which
+ * ({Campaign}, {CampaignId}, {AdGroup}, {AdGroupId}, {AdId}, {keyword}, {MatchType}, {Device}, {Network}, {QueryString}), which
  * Microsoft fills at click time. msclkid is kept in external_click_id: it is the key for an offline-conversion
  * upload to Microsoft. `network` (o = Bing/AOL/Yahoo, s = syndicated partners, a = Audience Network) lands in
  * publisher_name, so paid clicks from outside the search network are visible in reports.
@@ -94,6 +94,8 @@ const BING_MAPPINGS: ParamMapping[] = [
   { internalField: 'content_name', displayLabel: 'Match Type', externalKeys: ['match'], urlMacro: '{MatchType}', showInReports: true, priority: 14 },
   { internalField: 'platform', displayLabel: 'Device', externalKeys: ['device'], urlMacro: '{Device}', showInReports: true, priority: 15 },
   { internalField: 'publisher_name', displayLabel: 'Bing Network', externalKeys: ['network'], urlMacro: '{Network}', showInReports: true, priority: 16 },
+  // What the person actually typed ({QueryString}): the source of new negative keywords, and joinable with paid calls.
+  { internalField: 'cv9', displayLabel: 'Search Query', externalKeys: ['query'], urlMacro: '{QueryString}', showInReports: true, priority: 17 },
 ];
 
 export interface SeedProfile {
@@ -217,7 +219,7 @@ export const SYSTEM_TRAFFIC_SOURCE_PROFILES: SeedProfile[] = [
     directAdUrlTemplate:
       '{destinationUrl}?utm_source=bing&utm_medium=cpc&utm_campaign={Campaign}&utm_term={keyword}' +
       '&campaign_id={CampaignId}&adgroup_id={AdGroupId}&adgroup={AdGroup}&ad_id={AdId}' +
-      '&match={MatchType}&device={Device}&network={Network}',
+      '&match={MatchType}&device={Device}&network={Network}&query={QueryString}',
     paramMappings: BING_MAPPINGS,
     conversionMethod: ConversionMethod.none,
     // No automatic postback: Microsoft learns conversions from its UET tag or an offline upload keyed on msclkid.
@@ -230,7 +232,7 @@ export const SYSTEM_TRAFFIC_SOURCE_PROFILES: SeedProfile[] = [
       postbackUrlTemplate: 'none — Microsoft Ads conversions: UET tag on the page, or offline upload by msclkid',
     },
     setupNote:
-      'Final URL = the landing page. Paste everything after "?" of the Direct Ad URL into the Final URL suffix (campaign or account level) in Microsoft Ads; keep auto-tagging on so Microsoft appends msclkid. Microsoft fills {Campaign}, {CampaignId}, {AdGroup}, {AdGroupId}, {AdId}, {keyword}, {MatchType}, {Device} and {Network}. Add the LP script to your landing page (direct mode, no redirect).',
+      'Final URL = the landing page. Paste everything after "?" of the Direct Ad URL into the Final URL suffix (campaign or account level) in Microsoft Ads; keep auto-tagging on so Microsoft appends msclkid. Microsoft fills {Campaign}, {CampaignId}, {AdGroup}, {AdGroupId}, {AdId}, {keyword}, {MatchType}, {Device}, {Network} and {QueryString} (the search query, kept as cv9 "Search Query"). Add the LP script to your landing page (direct mode, no redirect).',
     isSystem: true,
   },
   {

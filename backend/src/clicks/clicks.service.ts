@@ -11,8 +11,10 @@ import {
   type ParamMapping,
   DEFAULT_PARAM_MAPPINGS,
   getReportFieldsFromClick,
+  resolveParamsFromMappings,
 } from '../shared/tracking/param-mapping';
 import {
+  applyMappedCustomVariables,
   applyNativeParamFallbacks,
   extractVoluumFields,
 } from '../shared/tracking/voluum-fields';
@@ -120,7 +122,7 @@ export class ClicksService {
     const rawParams = extractRawParams(query);
     const openAi = extractOpenAiAttribution(rawParams);
     const voluum = extractVoluumFields(query);
-    const customVars = applyNativeParamFallbacks(voluum.customVariables, {
+    const nativeCustomVars = applyNativeParamFallbacks(voluum.customVariables, {
       adId: params.ad_id,
       campaignExternalId: params.campaign_external_id,
       publisherName: params.publisher_name,
@@ -132,6 +134,8 @@ export class ClicksService {
       adsetId: params.adset_id || params.adset_name || params.utm_adset,
       placement: params.utm_content,
     });
+    // CV slots the traffic-source profile maps explicitly (e.g. Microsoft Ads search query → cv9).
+    const customVars = applyMappedCustomVariables(nativeCustomVars, resolveParamsFromMappings(query, mappings));
     const clickId = generateClickId();
     const userAgent = visitor.userAgent;
     const ipAddress = visitor.ipAddress;

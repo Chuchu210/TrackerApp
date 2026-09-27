@@ -58,6 +58,23 @@ export function extractVoluumFields(
   };
 }
 
+/**
+ * A traffic-source profile can map one of its own URL params to a CV slot (e.g. Microsoft Ads `query={QueryString}`
+ * → cv9 "Search Query"). That explicit mapping wins over the native fallbacks below; unreplaced macros never reach
+ * `resolved` (resolveParamsFromMappings drops them).
+ */
+export function applyMappedCustomVariables(
+  cvs: Record<string, string | undefined>,
+  resolved: Record<string, string | undefined>,
+): Record<string, string | undefined> {
+  const out = { ...cvs };
+  for (let i = 1; i <= 10; i++) {
+    const key = `cv${i}`;
+    if (resolved[key]) out[key] = resolved[key];
+  }
+  return out;
+}
+
 /** Map native ad URL params into CV slots when explicit var1-var10 are absent */
 export function applyNativeParamFallbacks(
   cvs: Record<string, string | undefined>,

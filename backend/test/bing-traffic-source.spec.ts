@@ -6,6 +6,7 @@ import {
 } from '../src/shared/tracking/param-mapping';
 import { getTrackingParamsFromQuery } from '../src/shared/tracking/params';
 import { inferTrafficSourceFromQuery } from '../src/shared/tracking/traffic-source-from-query';
+import { applyMappedCustomVariables, applyNativeParamFallbacks } from '../src/shared/tracking/voluum-fields';
 import { TrafficSourcesService } from '../src/traffic-sources/traffic-sources.service';
 import { SYSTEM_TRAFFIC_SOURCE_PROFILES } from '../src/traffic-sources/traffic-source-profiles.seed';
 
@@ -96,6 +97,25 @@ describe('Microsoft Ads (Bing) traffic source', () => {
       expect(CANONICAL_FIELDS).toContain(m.internalField as (typeof CANONICAL_FIELDS)[number]);
       expect(m.externalKeys.length).toBeGreaterThan(0);
     }
+  });
+
+  it('keeps the search query the person typed in cv9 "Search Query", over the native fallbacks', () => {
+    const q = { ...bingClick, query: 'water damage restoration pasadena emergency' };
+    const resolved = resolveParamsFromMappings(q, bing.paramMappings);
+    expect(resolved.cv9).toBe('water damage restoration pasadena emergency');
+    const native = applyNativeParamFallbacks({}, { adId: '84521234567890', platform: 'm' });
+    const cvs = applyMappedCustomVariables(native, resolved);
+    expect(cvs.cv9).toBe('water damage restoration pasadena emergency');
+    expect(cvs.cv1).toBe('84521234567890'); // native fallbacks untouched where no mapping applies
+    expect(cvs.cv7).toBe('m');
+    // An explicit mapping wins over a native fallback in the same slot.
+    expect(applyMappedCustomVariables({ cv9: 'fallback' }, { cv9: 'typed' }).cv9).toBe('typed');
+    // Preview clicks leave {QueryString} unfilled: nothing is stored.
+    const preview = resolveParamsFromMappings({ ...bingClick, query: '{QueryString}' }, bing.paramMappings);
+    expect(applyMappedCustomVariables({}, preview).cv9).toBeUndefined();
+    const label = bing.paramMappings.find((m) => m.internalField === 'cv9');
+    expect(label?.displayLabel).toBe('Search Query');
+    expect(bing.directAdUrlTemplate).toContain('&query={QueryString}');
   });
 
   it('a Bing click is not rerouted to another campaign by source inference', () => {
