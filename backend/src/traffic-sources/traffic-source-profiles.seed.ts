@@ -73,6 +73,29 @@ const TIKTOK_MAPPINGS: ParamMapping[] = [
   { internalField: 'utm_content', displayLabel: 'UTM Content', externalKeys: ['utm_content'], showInReports: true, priority: 4 },
 ];
 
+/**
+ * Microsoft Ads (Bing). Auto-tagging appends msclkid; the Final URL suffix below carries Microsoft's own macros
+ * ({Campaign}, {CampaignId}, {AdGroup}, {AdGroupId}, {AdId}, {keyword}, {MatchType}, {Device}, {Network}), which
+ * Microsoft fills at click time. msclkid is kept in external_click_id: it is the key for an offline-conversion
+ * upload to Microsoft. `network` (o = Bing/AOL/Yahoo, s = syndicated partners, a = Audience Network) lands in
+ * publisher_name, so paid clicks from outside the search network are visible in reports.
+ */
+const BING_MAPPINGS: ParamMapping[] = [
+  { internalField: 'external_click_id', displayLabel: 'MSCLKID', externalKeys: ['msclkid'], showInReports: true, priority: 1 },
+  { internalField: 'utm_source', displayLabel: 'UTM Source', externalKeys: ['utm_source'], showInReports: true, priority: 2 },
+  { internalField: 'utm_medium', displayLabel: 'UTM Medium', externalKeys: ['utm_medium'], showInReports: false, priority: 3 },
+  { internalField: 'utm_campaign', displayLabel: 'Campaign', externalKeys: ['utm_campaign'], urlMacro: '{Campaign}', showInReports: true, priority: 4 },
+  { internalField: 'utm_term', displayLabel: 'Keyword', externalKeys: ['utm_term', 'keyword'], urlMacro: '{keyword}', showInReports: true, priority: 5 },
+  { internalField: 'utm_content', displayLabel: 'UTM Content', externalKeys: ['utm_content'], showInReports: false, priority: 6 },
+  { internalField: 'campaign_external_id', displayLabel: 'Bing Campaign ID', externalKeys: ['campaign_id'], urlMacro: '{CampaignId}', showInReports: true, priority: 10 },
+  { internalField: 'adset_id', displayLabel: 'Bing Ad Group ID', externalKeys: ['adgroup_id'], urlMacro: '{AdGroupId}', showInReports: true, priority: 11 },
+  { internalField: 'adset_name', displayLabel: 'Ad Group', externalKeys: ['adgroup'], urlMacro: '{AdGroup}', showInReports: true, priority: 12 },
+  { internalField: 'ad_id', displayLabel: 'Bing Ad ID', externalKeys: ['ad_id'], urlMacro: '{AdId}', showInReports: true, priority: 13 },
+  { internalField: 'content_name', displayLabel: 'Match Type', externalKeys: ['match'], urlMacro: '{MatchType}', showInReports: true, priority: 14 },
+  { internalField: 'platform', displayLabel: 'Device', externalKeys: ['device'], urlMacro: '{Device}', showInReports: true, priority: 15 },
+  { internalField: 'publisher_name', displayLabel: 'Bing Network', externalKeys: ['network'], urlMacro: '{Network}', showInReports: true, priority: 16 },
+];
+
 export interface SeedProfile {
   slug: string;
   name: string;
@@ -184,6 +207,30 @@ export const SYSTEM_TRAFFIC_SOURCE_PROFILES: SeedProfile[] = [
     },
     setupNote:
       'Put the Direct Ad URL in Google Ads (final URL). Google adds gclid automatically. Add the LP script to your landing page.',
+    isSystem: true,
+  },
+  {
+    slug: 'bing',
+    name: 'Microsoft Ads (Bing)',
+    trackingModeDefault: TrackingMode.direct,
+    clickUrlTemplate: null,
+    directAdUrlTemplate:
+      '{destinationUrl}?utm_source=bing&utm_medium=cpc&utm_campaign={Campaign}&utm_term={keyword}' +
+      '&campaign_id={CampaignId}&adgroup_id={AdGroupId}&adgroup={AdGroup}&ad_id={AdId}' +
+      '&match={MatchType}&device={Device}&network={Network}',
+    paramMappings: BING_MAPPINGS,
+    conversionMethod: ConversionMethod.none,
+    // No automatic postback: Microsoft learns conversions from its UET tag or an offline upload keyed on msclkid.
+    // (A profile that left Mediago on would send every Bing conversion to Mediago and mark it failed.)
+    postbackDefaults: {
+      mediagoEnabled: false,
+      facebookEnabled: false,
+      googleEnabled: false,
+      requiredMetadata: ['msclkid'],
+      postbackUrlTemplate: 'none — Microsoft Ads conversions: UET tag on the page, or offline upload by msclkid',
+    },
+    setupNote:
+      'Final URL = the landing page. Paste everything after "?" of the Direct Ad URL into the Final URL suffix (campaign or account level) in Microsoft Ads; keep auto-tagging on so Microsoft appends msclkid. Microsoft fills {Campaign}, {CampaignId}, {AdGroup}, {AdGroupId}, {AdId}, {keyword}, {MatchType}, {Device} and {Network}. Add the LP script to your landing page (direct mode, no redirect).',
     isSystem: true,
   },
   {
