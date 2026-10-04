@@ -50,4 +50,12 @@ export type PlatformSyncAdapter = PlatformControlAdapter & {
     to: Date,
   ): Promise<AdSpendMetricRow[]>;
   testConnection(credentials: Record<string, unknown>, accountId: string | null): Promise<boolean>;
+  /**
+   * For OAuth platforms that rotate tokens (Bing): returns the credentials to
+   * store and use from now on, or null when the stored ones are still valid.
+   */
+  refreshCredentials?(
+    credentials: Record<string, unknown>,
+    accountId: string | null,
+  ): Promise<Record<string, unknown> | null>;
 };

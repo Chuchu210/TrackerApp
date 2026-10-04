@@ -14,7 +14,7 @@ import { MediagoSyncAdapter } from './adapters/mediago.adapter';
 import { OutbrainSyncAdapter } from './adapters/outbrain.adapter';
 import { TaboolaSyncAdapter } from './adapters/taboola.adapter';
 import { MgidSyncAdapter } from './adapters/mgid.adapter';
-import { BingSyncAdapter } from './adapters/bing.adapter';
+import { BingSyncAdapter, sanitizeBingCredentialsForResponse } from './adapters/bing.adapter';
 import { OpenAiSyncAdapter } from './adapters/openai.adapter';
 import { ManualSyncAdapter } from './adapters/manual.adapter';
 import {
@@ -26,6 +26,33 @@ import { sanitizeMediagoCredentialsForResponse } from './mediago/mediago-credent
 import { MetaCreativesService } from './meta-creatives.service';
 
 import { describeError } from '../common/utils/describe-error';
+
+/**
+ * One snapshot row per tracker campaign, day and hour. Several platform
+ * campaigns can map to the same tracker campaign, and the snapshot upsert is
+ * keyed on the tracker campaign: saved one by one, the last platform campaign
+ * overwrote the others instead of adding to them. Unmapped rows are dropped.
+ */
+export function sumByTrackerCampaign(
+  metrics: SpendMetricRow[],
+  mapByExternal: Map<string, string>,
+): { campaignId: string; row: SpendMetricRow }[] {
+  const out = new Map<string, { campaignId: string; row: SpendMetricRow }>();
+  for (const row of metrics) {
+    const campaignId = mapByExternal.get(row.externalCampaignId);
+    if (!campaignId) continue;
+    const key = `${campaignId}|${row.date.toISOString()}|${row.hour ?? -1}`;
+    const existing = out.get(key);
+    if (!existing) {
+      out.set(key, { campaignId, row: { ...row } });
+      continue;
+    }
+    existing.row.impressions += row.impressions;
+    existing.row.clicks += row.clicks;
+    existing.row.spend += row.spend;
+  }
+  return [...out.values()];
+}
 
 @Injectable()
 export class PlatformSyncService {
@@ -116,7 +143,7 @@ export class PlatformSyncService {
       new OutbrainSyncAdapter(this.http),
       new TaboolaSyncAdapter(this.http),
       new MgidSyncAdapter(this.http),
-      new BingSyncAdapter(),
+      new BingSyncAdapter(this.http),
       this.openAiAdapter,
       new ManualSyncAdapter(AdPlatform.powerspace),
       new ManualSyncAdapter(AdPlatform.organic),
@@ -132,7 +159,9 @@ export class PlatformSyncService {
       credentials:
         row.platform === AdPlatform.mediago
           ? sanitizeMediagoCredentialsForResponse(row.credentials as Record<string, unknown>)
-          : row.credentials,
+          : row.platform === AdPlatform.bing
+            ? sanitizeBingCredentialsForResponse(row.credentials as Record<string, unknown>)
+            : row.credentials,
     }));
   }
 
@@ -488,12 +517,21 @@ export class PlatformSyncService {
     const end = to || new Date();
     const start = from || new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    const metrics = await adapter.fetchMetrics(
-      conn.credentials as Record<string, unknown>,
-      conn.accountId,
-      start,
-      end,
-    );
+    let credentials = conn.credentials as Record<string, unknown>;
+    if (adapter.refreshCredentials) {
+      // Stored before the fetch: a rotated refresh token must not be lost if
+      // the report call fails afterwards.
+      const refreshed = await adapter.refreshCredentials(credentials, conn.accountId);
+      if (refreshed) {
+        credentials = refreshed;
+        await this.prisma.platformConnection.update({
+          where: { id: conn.id },
+          data: { credentials: refreshed as Prisma.InputJsonValue },
+        });
+      }
+    }
+
+    const metrics = await adapter.fetchMetrics(credentials, conn.accountId, start, end);
 
     const mappings = await this.prisma.campaignPlatformMapping.findMany({
       where: { platform: conn.platform },
@@ -501,9 +539,7 @@ export class PlatformSyncService {
     const mapByExternal = new Map(mappings.map((m) => [m.externalCampaignId, m.campaignId]));
 
     let saved = 0;
-    for (const row of metrics) {
-      const campaignId = mapByExternal.get(row.externalCampaignId);
-      if (!campaignId) continue;
+    for (const { campaignId, row } of sumByTrackerCampaign(metrics, mapByExternal)) {
       await this.saveSnapshot(campaignId, conn.platform, row, 'sync');
       saved++;
     }
@@ -514,7 +550,7 @@ export class PlatformSyncService {
     if (adapter.fetchAdMetrics) {
       try {
         const adRows = await adapter.fetchAdMetrics(
-          conn.credentials as Record<string, unknown>,
+          credentials,
           conn.accountId,
           start,
           end,
