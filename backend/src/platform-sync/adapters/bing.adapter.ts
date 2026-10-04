@@ -20,6 +20,8 @@ type BingCredentials = {
   clientSecret: string;
   refreshToken: string;
   tenant: string;
+  /** IANA zone of the Microsoft Ads account: report hours come back in it (e.g. Europe/Paris). */
+  timeZone: string;
   accessToken: string;
   accessTokenExpiresAt: number;
 };
@@ -48,6 +50,7 @@ function parseCredentials(raw: Record<string, unknown>, accountId: string | null
     clientSecret: str(raw.clientSecret),
     refreshToken: str(raw.refreshToken),
     tenant: str(raw.tenant) || 'common',
+    timeZone: str(raw.timeZone) || 'UTC',
     accessToken: str(raw.accessToken),
     accessTokenExpiresAt: Date.parse(str(raw.accessTokenExpiresAt)) || 0,
   };
@@ -103,17 +106,47 @@ export function parseCsv(text: string): string[][] {
   return rows.filter((r) => r.some((cell) => cell.trim() !== ''));
 }
 
+/** Minutes to add to UTC to get the wall-clock time in `timeZone` at that instant. */
+function tzOffsetMinutes(utcMs: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(new Date(utcMs));
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  return (Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute')) - utcMs) / 60000;
+}
+
+/** Wall-clock day + hour in `timeZone` -> the UTC instant (DST-aware). */
+export function localHourToUtc(day: string, hour: number, timeZone: string): Date | null {
+  const [y, m, d] = day.split('-').map(Number);
+  const guess = Date.UTC(y, m - 1, d, hour);
+  if (Number.isNaN(guess)) return null;
+  let utc = guess - tzOffsetMinutes(guess, timeZone) * 60000;
+  utc = guess - tzOffsetMinutes(utc, timeZone) * 60000;
+  return new Date(utc);
+}
+
 /**
  * "2026-10-04|7" (Hourly, FormatVersion 2.0) or "2026-10-04" (Daily).
- * Microsoft reports hours in UTC, which is also the tracker's default report day.
+ * The docs say report hours are UTC, but they come back in the account's time zone: on 04/10/2026 the
+ * tracker's own Bing clicks (7am-10pm PT) matched report hours 16-23 and 0-7 of a Paris-time account.
+ * They are converted to the UTC day and hour the tracker reports in.
  */
-function parseTimePeriod(value: string): { date: Date; hour?: number } | null {
+function parseTimePeriod(value: string, timeZone: string): { date: Date; hour?: number } | null {
   const [day, hourPart] = value.split('|');
   const date = new Date(`${day}T00:00:00.000Z`);
   if (Number.isNaN(date.getTime())) return null;
   if (hourPart === undefined) return { date };
   const hour = Number(hourPart);
-  return Number.isInteger(hour) && hour >= 0 && hour <= 23 ? { date, hour } : { date };
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) return { date };
+  const utc = localHourToUtc(day, hour, timeZone);
+  if (!utc) return null;
+  return { date: utcDay(utc), hour: utc.getUTCHours() };
 }
 
 function toNumber(value: string | undefined): number {
@@ -202,6 +235,11 @@ export class BingSyncAdapter implements PlatformSyncAdapter {
   ): Promise<SpendMetricRow[]> {
     const creds = parseCredentials(credentials, accountId);
     if (!creds.developerToken || !creds.customerId || !creds.accountId) return [];
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: creds.timeZone });
+    } catch {
+      throw new Error(`Bing credentials: unknown timeZone "${creds.timeZone}" (use an IANA zone such as Europe/Paris)`);
+    }
     const accessToken = await this.ensureAccessToken(creds);
     const headers = {
       Authorization: `Bearer ${accessToken}`,
@@ -217,6 +255,12 @@ export class BingSyncAdapter implements PlatformSyncAdapter {
     // time zone, the rows come back in UTC, and rows outside the window are
     // dropped below.
     const requestStart = new Date(firstDay.getTime() - DAY_MS);
+    // Report days are account-time days: a zone ahead of UTC (Paris) puts the last UTC hours on the next
+    // local day, so ask one day more, but never past today in the account zone.
+    const localToday = new Date(
+      Date.now() + tzOffsetMinutes(Date.now(), creds.timeZone) * 60000,
+    );
+    const requestEnd = new Date(Math.min(lastDay.getTime() + DAY_MS, utcDay(localToday).getTime()));
 
     const { data: submitted } = await firstValueFrom(
       this.http.post<SubmitResponse>(
@@ -245,7 +289,7 @@ export class BingSyncAdapter implements PlatformSyncAdapter {
             Scope: { AccountIds: [Number(creds.accountId)] },
             Time: {
               CustomDateRangeStart: reportDate(requestStart),
-              CustomDateRangeEnd: reportDate(lastDay),
+              CustomDateRangeEnd: reportDate(requestEnd),
               ReportTimeZone: 'GreenwichMeanTimeDublinEdinburghLisbonLondon',
             },
           },
@@ -269,10 +313,10 @@ export class BingSyncAdapter implements PlatformSyncAdapter {
     if (!entry) return [];
     const csv = entry.getData().toString('utf8').replace(/^﻿/, '');
 
-    return this.toRows(parseCsv(csv), firstDay, lastDay);
+    return this.toRows(parseCsv(csv), firstDay, lastDay, creds.timeZone);
   }
 
-  private toRows(table: string[][], firstDay: Date, lastDay: Date): SpendMetricRow[] {
+  private toRows(table: string[][], firstDay: Date, lastDay: Date, timeZone: string): SpendMetricRow[] {
     const [header, ...body] = table;
     if (!header) return [];
     const col = (name: string) => header.findIndex((h) => h.trim() === name);
@@ -288,7 +332,7 @@ export class BingSyncAdapter implements PlatformSyncAdapter {
 
     const rows: SpendMetricRow[] = [];
     for (const cells of body) {
-      const period = parseTimePeriod(cells[iTime] ?? '');
+      const period = parseTimePeriod(cells[iTime] ?? '', timeZone);
       const campaignId = (cells[iCampaign] ?? '').trim();
       if (!period || !/^\d+$/.test(campaignId)) continue;
       if (period.date < firstDay || period.date > lastDay) continue;

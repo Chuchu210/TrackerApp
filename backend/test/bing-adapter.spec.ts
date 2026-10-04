@@ -62,6 +62,12 @@ const CSV = [
 describe('BingSyncAdapter.fetchMetrics', () => {
   const from = new Date('2026-10-02T10:00:00.000Z');
   const to = new Date('2026-10-04T18:00:00.000Z');
+  // The request end date depends on "today" in the account zone: pin the clock to the day of the window.
+  let clock: jest.SpyInstance;
+  beforeEach(() => {
+    clock = jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-04T18:00:00Z'));
+  });
+  afterEach(() => clock.mockRestore());
 
   it('refreshes the token, submits an hourly UTC report and maps the rows', async () => {
     const { http, calls } = makeHttp({
@@ -121,6 +127,32 @@ describe('BingSyncAdapter.fetchMetrics', () => {
 
     expect(calls.filter((c) => c.url.endsWith('/Poll'))).toHaveLength(2);
     expect(calls.find((c) => c.method === 'get')!.url).toBe('https://dl.example/r.zip');
+  });
+
+  it('converts report hours from the account time zone to UTC (Paris account)', async () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-10T12:00:00Z'));
+    try {
+      const { http, calls } = makeHttp({ csv: CSV });
+      const adapter = new BingSyncAdapter(http as never, { pollIntervalMs: 0 });
+
+      const rows = await adapter.fetchMetrics({ ...CREDS, timeZone: 'Europe/Paris' }, '188285470', from, to);
+
+      // Paris is UTC+2 in October: 03/10 23h -> 03/10 21h UTC; 04/10 0h -> 03/10 22h UTC (previous UTC day).
+      expect(rows.map((r) => [r.date.toISOString().slice(0, 10), r.hour, r.spend])).toEqual([
+        ['2026-10-03', 21, 4.65],
+        ['2026-10-03', 22, 6.95],
+      ]);
+      // One day past the window, because Paris days end before UTC days.
+      const request = (calls.find((c) => c.url.endsWith('/Submit'))!.body as { ReportRequest: { Time: unknown } }).ReportRequest;
+      expect(request.Time).toMatchObject({ CustomDateRangeEnd: { Day: 5, Month: 10, Year: 2026 } });
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('rejects an unknown time zone instead of guessing', async () => {
+    const adapter = new BingSyncAdapter(makeHttp({ csv: CSV }).http as never, { pollIntervalMs: 0 });
+    await expect(adapter.fetchMetrics({ ...CREDS, timeZone: 'Paris' }, '188285470', from, to)).rejects.toThrow('unknown timeZone');
   });
 
   it('reuses a stored access token that is still valid', async () => {
