@@ -57,6 +57,28 @@ export class TrackerScriptService {
     flushPending();
   }
 
+  // The ad platform's own click id in the URL (one per billed click). A NEW one means a new paid click, even when
+  // this browser already holds a tk-cid from an earlier click (24 h cookie): without this, a second ad or sitelink
+  // click by the same person was merged into the first visit and the tracker counted fewer clicks than the ad
+  // platform billed (Bing 05/10/2026: 6 billed, 6 page hits, 5 visits).
+  function adClickId() {
+    var p = new URLSearchParams(w.location.search);
+    var keys = ["msclkid", "gclid", "gbraid", "wbraid", "fbclid"];
+    for (var i = 0; i < keys.length; i++) {
+      var v = p.get(keys[i]);
+      if (v) return keys[i] + ":" + v;
+    }
+    return null;
+  }
+
+  function clearCid() {
+    d.cookie = "tk-cid=; " + secure + "samesite=Strict; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+    try {
+      g.removeItem("tk-cid");
+      g.removeItem("tk-cid-expires");
+    } catch (e) {}
+  }
+
   function getVid() {
     var m = d.cookie.match(/(^| )tk-vid=([^;]+)/);
     if (m) return decodeURIComponent(m[2]);
@@ -142,6 +164,10 @@ export class TrackerScriptService {
       .then(function (data) {
         if (data && data.visitorId) saveVid(data.visitorId);
         if (data && data.clickId) {
+          var xid = adClickId();
+          try {
+            if (xid) g.setItem("tk-xid", xid);
+          } catch (e) {}
           saveCid(data.clickId);
           if (!noViewContent) maybeAutoViewContent(tag);
         }
@@ -297,6 +323,15 @@ export class TrackerScriptService {
 
     var campaign = tag && tag.getAttribute("data-campaign");
     var mode = (tag && tag.getAttribute("data-mode")) || "direct";
+
+    // New billed ad click (new msclkid/gclid...) while an older visit is still in the cookie: start a new visit.
+    // Same click id (reload, back button) or no click id (internal navigation): keep the current visit.
+    var xid = adClickId();
+    var lastXid = null;
+    try { lastXid = g.getItem("tk-xid"); } catch (e) {}
+    if (mode === "direct" && campaign && xid && getCid() && xid !== lastXid) {
+      clearCid();
+    }
 
     if (mode === "direct" && campaign && !getCid()) {
       registerDirectVisit(campaign, tag);
