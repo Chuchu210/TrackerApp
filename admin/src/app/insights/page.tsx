@@ -22,7 +22,7 @@ import { ExcludeBotsToggle } from '@/components/ExcludeBotsToggle';
 import { trackerApi, formatApiError, type Campaign, type ProfitabilityReport } from '@/lib/api';
 
 export default function InsightsPage() {
-  const [range, setRange] = useState<DateRange>(buildPresets()[2]);
+  const [range, setRange] = useState<DateRange>(buildPresets()[0]);
   const [campaignId, setCampaignId] = useState('');
   const [dimension, setDimension] = useState<'hour' | 'dow' | 'country' | 'device'>('hour');
   const [excludeBots, setExcludeBots] = useState(false);

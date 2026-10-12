@@ -35,7 +35,7 @@ const VERDICT_TONE = { kill: 'danger', watch: 'warning', scale: 'success' } as c
 
 export default function PlacementsPage() {
   const toast = useToast();
-  const [range, setRange] = useState<DateRange>(buildPresets()[2]);
+  const [range, setRange] = useState<DateRange>(buildPresets()[0]);
   const [campaignId, setCampaignId] = useState('');
   const [dimension, setDimension] = useState<'site' | 'publisher'>('site');
   const [excludeBots, setExcludeBots] = useState(false);

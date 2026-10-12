@@ -28,7 +28,7 @@ import {
 } from '@/lib/api';
 
 export default function FunnelPage() {
-  const [range, setRange] = useState<DateRange>(buildPresets()[2]);
+  const [range, setRange] = useState<DateRange>(buildPresets()[0]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [campaignId, setCampaignId] = useState('');
   const [landerId, setLanderId] = useState('');

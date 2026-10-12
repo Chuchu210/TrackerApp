@@ -78,7 +78,7 @@ const SEV_TONE: Record<CreativeRecommendation['severity'], 'success' | 'warning'
   };
 
 export default function PerformancePage() {
-  const [range, setRange] = useState<DateRange>(buildPresets()[2]);
+  const [range, setRange] = useState<DateRange>(buildPresets()[0]);
   const [campaignId, setCampaignId] = useState('');
   const [eventType, setEventType] = useState('call_click');
   const [countMode, setCountMode] = useState<'recorded' | 'sent'>('recorded');

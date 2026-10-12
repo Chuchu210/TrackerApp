@@ -84,7 +84,7 @@ const DIMENSIONS: { id: VisitBreakdownDimension; label: string }[] = [
 type SortKey = 'visits' | 'botPct' | 'convertingVisits' | 'cr' | 'revenue';
 
 export default function ClicksPage() {
-  const [range, setRange] = useState<DateRange>(buildPresets()[2]);
+  const [range, setRange] = useState<DateRange>(buildPresets()[0]);
   const [viewMode, setViewMode] = useState<ViewMode>('performance');
   const [dimension, setDimension] = useState<VisitBreakdownDimension>('publisher');
   const [sortKey, setSortKey] = useState<SortKey>('visits');

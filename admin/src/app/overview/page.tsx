@@ -60,7 +60,7 @@ const KPI_CARDS: {
 type SelectedCampaign = { id: string; name: string };
 
 export default function OverviewPage() {
-  const [range, setRange] = useState<DateRange>(buildPresets()[2]);
+  const [range, setRange] = useState<DateRange>(buildPresets()[0]);
   const [excludeBots, setExcludeBots] = useState(false);
   const [overview, setOverview] = useState<VisitStats | null>(null);
   const [digest, setDigest] = useState<DigestReport | null>(null);
