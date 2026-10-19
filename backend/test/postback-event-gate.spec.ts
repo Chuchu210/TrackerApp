@@ -15,4 +15,10 @@ describe('shouldFireNetworkPostback', () => {
     expect(shouldFireNetworkPostback('quiz_started', 'mediago')).toBe(false);
     expect(shouldFireNetworkPostback('quiz_q2', 'mediago')).toBe(false);
   });
+
+  it('never forwards the landing-page engagement measure', () => {
+    expect(shouldFireNetworkPostback('page_engagement')).toBe(false);
+    expect(shouldFireNetworkPostback('page_engagement', 'facebook')).toBe(false);
+    expect(shouldFireNetworkPostback('page_engagement', 'mediago')).toBe(false);
+  });
 });
