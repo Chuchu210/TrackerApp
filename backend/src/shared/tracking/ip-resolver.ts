@@ -26,24 +26,13 @@ function getHeader(
   return value;
 }
 
-function parseForwardedChain(header?: string): string[] {
-  if (!header) return [];
-  return header.split(',').map((part) => part.trim()).filter(Boolean);
-}
-
-/** Pick the first public IP in X-Forwarded-For, else the left-most client IP */
-function pickForwardedIp(header?: string): string | undefined {
-  const chain = parseForwardedChain(header);
-  if (chain.length === 0) return undefined;
-
-  for (const ip of chain) {
-    const normalized = normalizeIp(ip);
-    if (!isPrivateOrLoopback(normalized)) return normalized;
-  }
-
-  return normalizeIp(chain[0]);
-}
-
+/**
+ * IP du visiteur. Seul X-Real-IP est cru : nginx l'écrase avec $remote_addr, que real_ip a déjà ramené à l'IP
+ * du visiteur en ne faisant confiance qu'aux plages Cloudflare (CF-Connecting-IP). CF-Connecting-IP,
+ * True-Client-IP, X-Client-IP et X-Forwarded-For peuvent tous être écrits par l'appelant : les lire ici
+ * laisserait n'importe qui choisir l'IP enregistrée (géo, filtres bots, doublons).
+ * Ensuite req.ip (trust proxy 1 = l'adresse posée par nginx) puis le socket.
+ */
 export function resolveClientIp(options: {
   headers: Record<string, string | string[] | undefined>;
   fallbackIp?: string;
@@ -52,11 +41,7 @@ export function resolveClientIp(options: {
 }): string | undefined {
   const candidates = [
     options.devOverrideIp,
-    getHeader(options.headers, 'cf-connecting-ip'),
-    getHeader(options.headers, 'true-client-ip'),
     getHeader(options.headers, 'x-real-ip'),
-    getHeader(options.headers, 'x-client-ip'),
-    pickForwardedIp(getHeader(options.headers, 'x-forwarded-for')),
     options.fallbackIp,
     options.socketIp,
   ];
